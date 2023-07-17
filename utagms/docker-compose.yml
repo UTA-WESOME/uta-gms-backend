@@ -1,0 +1,32 @@
+services:
+  uta-gms-django:
+    container_name: uta_gms_django
+    build:
+      context: .
+    command: >
+      sh -c "python manage.py migrate && 
+             python manage.py runserver 0.0.0.0:8080"
+    ports:
+      - "8080:8080"
+    env_file: .env
+    volumes:
+      - .:/app
+    depends_on:
+      uta-gms-postgres:
+        condition: service_healthy
+
+  uta-gms-postgres:
+    image: postgres
+    ports:
+      - "54320:5432"
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data
+    env_file: .env
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
