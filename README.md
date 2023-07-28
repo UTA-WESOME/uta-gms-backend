@@ -5,3 +5,6 @@
 cd utagms
 docker-compose up --build
 ```
+
+## Database Schema
+<img src="/dbSchema.png" />
