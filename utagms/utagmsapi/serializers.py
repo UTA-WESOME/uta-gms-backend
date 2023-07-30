@@ -6,7 +6,7 @@ from utagmsapi import models
 
 class UserSerializer(serializers.ModelSerializer):
     email = serializers.CharField(max_length=32, help_text="User email")
-    password = serializers.CharField(max_length=32, help_text="User password")
+    password = serializers.CharField(max_length=255, help_text="User password")
     name = serializers.CharField(max_length=64, help_text="User first name")
     surname = serializers.CharField(max_length=64, help_text="User last name")
 

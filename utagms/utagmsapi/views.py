@@ -1,6 +1,7 @@
 import datetime
 
 import jwt
+from django.contrib.auth.hashers import check_password
 from rest_framework import generics
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.response import Response
@@ -46,7 +47,7 @@ class LoginView(APIView):
         if user is None:
             raise AuthenticationFailed("User not found!")
 
-        if not user.check_password(password):
+        if not check_password(password, user.password):
             raise AuthenticationFailed("Incorrect password!")
 
         payload = {
@@ -72,7 +73,7 @@ class UserView(APIView):
             raise AuthenticationFailed('Unauthenticated!')
 
         try:
-            payload = jwt.decode(token, 'secret', algorithms=['HS256'])
+            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'])
         except jwt.ExpiredSignatureError:
             raise AuthenticationFailed('Unantenticated!')
 
