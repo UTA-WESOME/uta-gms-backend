@@ -50,32 +50,49 @@ class LoginView(APIView):
         if not check_password(password, user.password):
             raise AuthenticationFailed("Incorrect password!")
 
+        # create a token
         payload = {
             'id': user.id,
-            'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=60),
+            'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=15),
             'iat': datetime.datetime.now()
         }
         token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
 
+        # create a refresh token
+        payload = {
+            'id': user.id,
+            'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24),
+            'iat': datetime.datetime.now()
+        }
+        refresh_token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
+
         response = Response({
-            'jwt': token
+            'access_token': token
         })
-        response.set_cookie(key='jwt', value=token, httponly=True)
+        response.set_cookie(key='refresh_token', value=refresh_token, httponly=True)
 
         return response
 
 
 class UserView(APIView):
     def get(self, request):
-        token = request.COOKIES.get('jwt')
+        token = request.META.get('Authorization')
 
+        # sanity check
         if not token:
             raise AuthenticationFailed('Unauthenticated!')
+
+        # check to see if there is a word Bearer
+        if token.split()[0] != "Bearer":
+            raise AuthenticationFailed('Wrong authentication method!')
+
+        # get jwt token
+        token = token.split()[1]
 
         try:
             payload = jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'])
         except jwt.ExpiredSignatureError:
-            raise AuthenticationFailed('Unantenticated!')
+            raise AuthenticationFailed('Unauthenticated!')
 
         user = User.objects.filter(id=payload['id']).first()
         serializer = UserSerializer(user)
@@ -83,10 +100,50 @@ class UserView(APIView):
         return Response(serializer.data)
 
 
+class RefreshView(APIView):
+    def get(self, request):
+        token = request.COOKIES.get('refresh_token')
+
+        # sanity check
+        if not token:
+            raise AuthenticationFailed('Unauthenticated!')
+
+        try:
+            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'])
+        except jwt.ExpiredSignatureError:
+            raise AuthenticationFailed('Unauthenticated!')
+
+        # get user from db
+        user = User.objects.filter(id=payload['id']).first()
+        serializer = UserSerializer(user)
+
+        # create a token
+        payload = {
+            'id': user.id,
+            'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=15),
+            'iat': datetime.datetime.now()
+        }
+        token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
+
+        # create a refresh token
+        payload = {
+            'id': user.id,
+            'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24),
+            'iat': datetime.datetime.now()
+        }
+        refresh_token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
+
+        response = Response({
+            'access_token': token
+        })
+        response.set_cookie(key='refresh_token', value=refresh_token, httponly=True)
+        return response
+
+
 class LogoutView(APIView):
     def post(self, request):
         response = Response()
-        response.delete_cookie('jwt')
+        response.delete_cookie('refresh_token')
         response.data = {
             'message': 'success'
         }

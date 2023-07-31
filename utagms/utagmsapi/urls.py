@@ -12,7 +12,7 @@ from .views import (
     CriterionFunctionList,
     CriterionFunctionDetail,
     HasseGraphList,
-    HasseGraphDetail, RegisterView, LoginView, UserView, LogoutView
+    HasseGraphDetail, RegisterView, LoginView, UserView, LogoutView, RefreshView
 )
 
 urlpatterns = [
@@ -20,6 +20,7 @@ urlpatterns = [
     path('login', LoginView.as_view()),
     path('user', UserView.as_view()),
     path('logout', LogoutView.as_view()),
+    path('refresh', RefreshView.as_view()),
     path('projects/', ProjectList.as_view()),
     path('projects/', ProjectDetail.as_view()),
     path('criteria/', CriterionList.as_view()),
