@@ -3,8 +3,9 @@ import datetime
 import jwt
 from django.contrib.auth.hashers import check_password
 from rest_framework import generics
-from rest_framework.exceptions import AuthenticationFailed
+from rest_framework.exceptions import AuthenticationFailed, ValidationError
 from rest_framework.response import Response
+from rest_framework.status import HTTP_409_CONFLICT
 from rest_framework.views import APIView
 from django.conf import settings
 
@@ -32,6 +33,10 @@ from .serializers import (
 # User
 class RegisterView(APIView):
     def post(self, request):
+        # check if user with this email already exists
+        if User.objects.filter(email=request.data.get('email')).exists():
+            raise ValidationError("User already exists!")
+
         serializer = UserSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save()
