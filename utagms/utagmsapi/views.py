@@ -1,4 +1,13 @@
+import datetime
+
+import jwt
+from django.contrib.auth.hashers import check_password
 from rest_framework import generics
+from rest_framework.exceptions import AuthenticationFailed, ValidationError
+from rest_framework.response import Response
+from rest_framework.status import HTTP_409_CONFLICT
+from rest_framework.views import APIView
+from django.conf import settings
 
 from .models import (
     User,
@@ -22,14 +31,128 @@ from .serializers import (
 
 
 # User
-class UserList(generics.ListCreateAPIView):
-    queryset = User.objects.all()
-    serializer_class = UserSerializer
+class RegisterView(APIView):
+    def post(self, request):
+        # check if user with this email already exists
+        if User.objects.filter(email=request.data.get('email')).exists():
+            raise ValidationError("User already exists!")
+
+        serializer = UserSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
 
 
-class UserDetail(generics.RetrieveUpdateDestroyAPIView):
-    queryset = User.objects.all()
-    serializer_class = UserSerializer
+class LoginView(APIView):
+    def post(self, request):
+        email = request.data['email']
+        password = request.data['password']
+
+        user = User.objects.filter(email=email).first()
+        if user is None:
+            raise AuthenticationFailed("User not found!")
+
+        if not check_password(password, user.password):
+            raise AuthenticationFailed("Incorrect password!")
+
+        # create a token
+        payload = {
+            'id': user.id,
+            'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=15),
+            'iat': datetime.datetime.now()
+        }
+        token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
+
+        # create a refresh token
+        payload = {
+            'id': user.id,
+            'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24),
+            'iat': datetime.datetime.now()
+        }
+        refresh_token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
+
+        response = Response({
+            'access_token': token
+        })
+        response.set_cookie(key='refresh_token', value=refresh_token, httponly=True)
+
+        return response
+
+
+class UserView(APIView):
+    def get(self, request):
+        token = request.META.get('Authorization')
+
+        # sanity check
+        if not token:
+            raise AuthenticationFailed('Unauthenticated!')
+
+        # check to see if there is a word Bearer
+        if token.split()[0] != "Bearer":
+            raise AuthenticationFailed('Wrong authentication method!')
+
+        # get jwt token
+        token = token.split()[1]
+
+        try:
+            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'])
+        except jwt.ExpiredSignatureError:
+            raise AuthenticationFailed('Unauthenticated!')
+
+        user = User.objects.filter(id=payload['id']).first()
+        serializer = UserSerializer(user)
+
+        return Response(serializer.data)
+
+
+class RefreshView(APIView):
+    def get(self, request):
+        token = request.COOKIES.get('refresh_token')
+
+        # sanity check
+        if not token:
+            raise AuthenticationFailed('Unauthenticated!')
+
+        try:
+            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'])
+        except jwt.ExpiredSignatureError:
+            raise AuthenticationFailed('Unauthenticated!')
+
+        # get user from db
+        user = User.objects.filter(id=payload['id']).first()
+        serializer = UserSerializer(user)
+
+        # create a token
+        payload = {
+            'id': user.id,
+            'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=15),
+            'iat': datetime.datetime.now()
+        }
+        token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
+
+        # create a refresh token
+        payload = {
+            'id': user.id,
+            'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24),
+            'iat': datetime.datetime.now()
+        }
+        refresh_token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
+
+        response = Response({
+            'access_token': token
+        })
+        response.set_cookie(key='refresh_token', value=refresh_token, httponly=True)
+        return response
+
+
+class LogoutView(APIView):
+    def post(self, request):
+        response = Response()
+        response.delete_cookie('refresh_token')
+        response.data = {
+            'message': 'success'
+        }
+        return response
 
 
 # Project

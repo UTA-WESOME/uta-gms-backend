@@ -1,8 +1,6 @@
 from django.urls import path
 
 from .views import (
-    UserList,
-    UserDetail,
     ProjectList,
     ProjectDetail,
     CriterionList,
@@ -14,12 +12,15 @@ from .views import (
     CriterionFunctionList,
     CriterionFunctionDetail,
     HasseGraphList,
-    HasseGraphDetail
+    HasseGraphDetail, RegisterView, LoginView, UserView, LogoutView, RefreshView
 )
 
 urlpatterns = [
-    path('users/', UserList.as_view()),
-    path('users/', UserDetail.as_view()),
+    path('register', RegisterView.as_view()),
+    path('login', LoginView.as_view()),
+    path('user', UserView.as_view()),
+    path('logout', LogoutView.as_view()),
+    path('refresh', RefreshView.as_view()),
     path('projects/', ProjectList.as_view()),
     path('projects/', ProjectDetail.as_view()),
     path('criteria/', CriterionList.as_view()),
