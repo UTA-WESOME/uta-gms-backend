@@ -22,7 +22,7 @@ urlpatterns = [
     path('logout', LogoutView.as_view()),
     path('refresh', RefreshView.as_view()),
     path('projects/', ProjectList.as_view()),
-    path('projects/', ProjectDetail.as_view()),
+    path('projects/<int:pk>', ProjectDetail.as_view()),
     path('criteria/', CriterionList.as_view()),
     path('criteria/', CriterionDetail.as_view()),
     path('alternatives/', AlternativeList.as_view()),

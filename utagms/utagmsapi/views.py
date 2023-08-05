@@ -18,6 +18,7 @@ from .models import (
     CriterionFunction,
     HasseGraph
 )
+from .permissions import IsOwnerOfProject
 
 from .serializers import (
     UserSerializer,
@@ -81,7 +82,9 @@ class LoginView(APIView):
 
 class UserView(APIView):
     def get(self, request):
-        token = request.META.get('Authorization')
+        token = request.META.get('HTTP_AUTHORIZATION')
+
+        print(token)
 
         # sanity check
         if not token:
@@ -162,6 +165,7 @@ class ProjectList(generics.ListCreateAPIView):
 
 
 class ProjectDetail(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsOwnerOfProject]
     queryset = Project.objects.all()
     serializer_class = ProjectSerializer
 
