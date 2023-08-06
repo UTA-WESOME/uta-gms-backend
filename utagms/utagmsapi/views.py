@@ -1,14 +1,14 @@
 import datetime
 
 import jwt
+from django.conf import settings
 from django.contrib.auth.hashers import check_password
 from rest_framework import generics
 from rest_framework.exceptions import AuthenticationFailed, ValidationError
 from rest_framework.response import Response
-from rest_framework.status import HTTP_409_CONFLICT
 from rest_framework.views import APIView
-from django.conf import settings
 
+from utagmsapi.utils.jwt import get_user_from_jwt
 from .models import (
     User,
     Project,
@@ -18,8 +18,7 @@ from .models import (
     CriterionFunction,
     HasseGraph
 )
-from .permissions import IsOwnerOfProject
-
+from .permissions import IsOwnerOfProject, IsLogged
 from .serializers import (
     UserSerializer,
     ProjectSerializer,
@@ -160,8 +159,17 @@ class LogoutView(APIView):
 
 # Project
 class ProjectList(generics.ListCreateAPIView):
-    queryset = Project.objects.all()
+    permission_classes = [IsLogged]
     serializer_class = ProjectSerializer
+
+    def get_queryset(self):
+        token = self.request.META.get('HTTP_AUTHORIZATION')
+        user = get_user_from_jwt(token)
+        queryset = Project.objects.filter(user=user)
+        return queryset
+
+    def perform_create(self, serializer):
+        serializer.save(user=get_user_from_jwt(self.request.META.get('HTTP_AUTHORIZATION')))
 
 
 class ProjectDetail(generics.RetrieveUpdateDestroyAPIView):

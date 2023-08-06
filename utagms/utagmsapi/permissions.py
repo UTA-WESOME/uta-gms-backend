@@ -1,29 +1,31 @@
 import jwt
-from django.conf import settings
 from rest_framework import permissions
 
-from utagmsapi.models import User
+from utagmsapi.utils.jwt import get_user_from_jwt
+
+
+class IsLogged(permissions.BasePermission):
+
+    def has_permission(self, request, view):
+        token = request.META.get('HTTP_AUTHORIZATION')
+
+        try:
+            _ = get_user_from_jwt(token)
+        except (jwt.ExpiredSignatureError, jwt.InvalidSignatureError):
+            return False
+
+        return True
 
 
 class IsOwnerOfProject(permissions.BasePermission):
 
     def has_object_permission(self, request, view, obj):
+
         token = request.META.get('HTTP_AUTHORIZATION')
 
-        # sanity check
-        if not token:
-            return False
-
-        # check to see if there is a word Bearer
-        if token.split()[0] != "Bearer":
-            return False
-
-        # get jwt token
-        token = token.split()[1]
-
         try:
-            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'])
+            user = get_user_from_jwt(token)
         except (jwt.ExpiredSignatureError, jwt.InvalidSignatureError):
             return False
 
-        return obj.user == User.objects.filter(id=payload['id']).first()
+        return obj.user == user
