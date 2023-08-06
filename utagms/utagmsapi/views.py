@@ -74,7 +74,8 @@ class LoginView(APIView):
         response = Response({
             'access_token': token
         })
-        response.set_cookie(key='refresh_token', value=refresh_token, httponly=True)
+        response.set_cookie(key='refresh_token', value=refresh_token, httponly=True,
+                            max_age=datetime.timedelta(days=30))
 
         return response
 
@@ -143,7 +144,8 @@ class RefreshView(APIView):
         response = Response({
             'access_token': token
         })
-        response.set_cookie(key='refresh_token', value=refresh_token, httponly=True)
+        response.set_cookie(key='refresh_token', value=refresh_token, httponly=True,
+                            max_age=datetime.timedelta(days=30))
         return response
 
 
