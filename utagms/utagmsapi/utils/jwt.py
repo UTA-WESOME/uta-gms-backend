@@ -11,12 +11,6 @@ def get_user_from_jwt(token: str) -> User:
     if not token:
         return None
 
-    # check to see if there is a word Bearer
-    if token.split()[0] != "Bearer":
-        return None
-
-    # get jwt token
-    token = token.split()[1]
     payload = jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'])
 
     # retrieve User by id

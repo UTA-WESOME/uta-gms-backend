@@ -7,7 +7,10 @@ from utagmsapi.utils.jwt import get_user_from_jwt
 class IsLogged(permissions.BasePermission):
 
     def has_permission(self, request, view):
-        token = request.META.get('HTTP_AUTHORIZATION')
+        token = request.COOKIES.get('access_token')
+
+        if token is None:
+            return False
 
         try:
             _ = get_user_from_jwt(token)
@@ -20,8 +23,10 @@ class IsLogged(permissions.BasePermission):
 class IsOwnerOfProject(permissions.BasePermission):
 
     def has_object_permission(self, request, view, obj):
+        token = request.COOKIES.get('access_token')
 
-        token = request.META.get('HTTP_AUTHORIZATION')
+        if token is None:
+            return False
 
         try:
             user = get_user_from_jwt(token)
