@@ -33,7 +33,8 @@ class ProjectSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = models.Project
-        fields = "__all__"
+        exclude = ['user']
+        # fields = "__all__"
 
 
 class CriterionSerializer(serializers.ModelSerializer):

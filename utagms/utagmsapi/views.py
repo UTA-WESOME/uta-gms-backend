@@ -1,14 +1,14 @@
 import datetime
 
 import jwt
+from django.conf import settings
 from django.contrib.auth.hashers import check_password
 from rest_framework import generics
 from rest_framework.exceptions import AuthenticationFailed, ValidationError
 from rest_framework.response import Response
-from rest_framework.status import HTTP_409_CONFLICT
 from rest_framework.views import APIView
-from django.conf import settings
 
+from utagmsapi.utils.jwt import get_user_from_jwt
 from .models import (
     User,
     Project,
@@ -18,7 +18,7 @@ from .models import (
     CriterionFunction,
     HasseGraph
 )
-
+from .permissions import IsOwnerOfProject, IsLogged
 from .serializers import (
     UserSerializer,
     ProjectSerializer,
@@ -72,16 +72,18 @@ class LoginView(APIView):
         refresh_token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
 
         response = Response({
-            'access_token': token
+            'message': 'authenticated'
         })
-        response.set_cookie(key='refresh_token', value=refresh_token, httponly=True)
+        response.set_cookie(key='access_token', value=token, httponly=True)
+        response.set_cookie(key='refresh_token', value=refresh_token, httponly=True,
+                            max_age=datetime.timedelta(days=30))
 
         return response
 
 
 class UserView(APIView):
     def get(self, request):
-        token = request.META.get('Authorization')
+        token = request.META.get('HTTP_AUTHORIZATION')
 
         # sanity check
         if not token:
@@ -109,18 +111,13 @@ class RefreshView(APIView):
     def get(self, request):
         token = request.COOKIES.get('refresh_token')
 
-        # sanity check
-        if not token:
-            raise AuthenticationFailed('Unauthenticated!')
-
         try:
-            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'])
-        except jwt.ExpiredSignatureError:
+            user = get_user_from_jwt(token)
+        except (jwt.ExpiredSignatureError, jwt.InvalidSignatureError):
             raise AuthenticationFailed('Unauthenticated!')
 
-        # get user from db
-        user = User.objects.filter(id=payload['id']).first()
-        serializer = UserSerializer(user)
+        if user is None:
+            raise AuthenticationFailed('Unauthenticated!')
 
         # create a token
         payload = {
@@ -138,16 +135,20 @@ class RefreshView(APIView):
         }
         refresh_token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
 
+        # create the response with tokens in cookies
         response = Response({
-            'access_token': token
+            'message': 'authenticated'
         })
-        response.set_cookie(key='refresh_token', value=refresh_token, httponly=True)
+        response.set_cookie(key='access_token', value=token, httponly=True)
+        response.set_cookie(key='refresh_token', value=refresh_token, httponly=True,
+                            max_age=datetime.timedelta(days=30))
         return response
 
 
 class LogoutView(APIView):
     def post(self, request):
         response = Response()
+        response.delete_cookie('access_token')
         response.delete_cookie('refresh_token')
         response.data = {
             'message': 'success'
@@ -157,11 +158,21 @@ class LogoutView(APIView):
 
 # Project
 class ProjectList(generics.ListCreateAPIView):
-    queryset = Project.objects.all()
+    permission_classes = [IsLogged]
     serializer_class = ProjectSerializer
+
+    def get_queryset(self):
+        token = self.request.COOKIES.get('access_token')
+        user = get_user_from_jwt(token)
+        queryset = Project.objects.filter(user=user)
+        return queryset
+
+    def perform_create(self, serializer):
+        serializer.save(user=get_user_from_jwt(self.request.COOKIES.get('access_token')))
 
 
 class ProjectDetail(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsOwnerOfProject]
     queryset = Project.objects.all()
     serializer_class = ProjectSerializer
 
