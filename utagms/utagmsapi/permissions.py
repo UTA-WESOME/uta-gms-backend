@@ -1,7 +1,7 @@
 import jwt
 from rest_framework import permissions
 
-from utagmsapi.models import Project, Criterion
+from utagmsapi.models import Project, Criterion, Alternative
 from utagmsapi.utils.jwt import get_user_from_jwt
 
 
@@ -68,3 +68,26 @@ class IsOwnerOfCriterion(permissions.BasePermission):
 
         # check if criterion's project user is the same as the one making the request
         return criterion.project.user == user
+
+
+class IsOwnerOfAlternative(permissions.BasePermission):
+
+    def has_permission(self, request, view):
+
+        # get user
+        token = request.COOKIES.get('access_token')
+        if token is None:
+            return False
+        try:
+            user = get_user_from_jwt(token)
+        except (jwt.ExpiredSignatureError, jwt.InvalidSignatureError):
+            return False
+
+        # get alternative
+        alternative_pk = view.kwargs.get('alternative_pk')
+        if alternative_pk is None:
+            return False
+        alternative = Alternative.objects.filter(id=alternative_pk).first()
+
+        # check if alternative's project user is the same as the one making the request
+        return alternative.project.user == user

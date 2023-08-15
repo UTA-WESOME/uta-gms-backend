@@ -54,7 +54,8 @@ class AlternativeSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = models.Alternative
-        fields = "__all__"
+        exclude = ['project']
+        # fields = "__all__"
 
 
 class PerformanceSerializer(serializers.ModelSerializer):

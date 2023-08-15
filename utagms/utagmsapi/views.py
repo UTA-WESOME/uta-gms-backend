@@ -18,7 +18,12 @@ from .models import (
     CriterionFunction,
     HasseGraph
 )
-from .permissions import IsOwnerOfProject, IsLogged, IsOwnerOfCriterion
+from .permissions import (
+    IsOwnerOfProject,
+    IsLogged,
+    IsOwnerOfCriterion,
+    IsOwnerOfAlternative
+)
 from .serializers import (
     UserSerializer,
     ProjectSerializer,
@@ -203,13 +208,25 @@ class CriterionDetail(generics.RetrieveUpdateDestroyAPIView):
 
 # Alternative
 class AlternativeList(generics.ListCreateAPIView):
-    queryset = Alternative.objects.all()
+    permission_classes = [IsOwnerOfProject]
     serializer_class = AlternativeSerializer
+
+    def get_queryset(self):
+        project_id = self.kwargs.get("project_pk")
+        alternatives = Alternative.objects.filter(project=project_id)
+        return alternatives
+
+    def perform_create(self, serializer):
+        project_id = self.kwargs.get("project_pk")
+        project = Project.objects.filter(id=project_id).first()
+        serializer.save(project=project)
 
 
 class AlternativeDetail(generics.RetrieveUpdateDestroyAPIView):
-    queryset = Alternative.objects.all()
+    permission_classes = [IsOwnerOfAlternative]
     serializer_class = AlternativeSerializer
+    queryset = Alternative.objects.all()
+    lookup_url_kwarg = 'alternative_pk'
 
 
 # Performance

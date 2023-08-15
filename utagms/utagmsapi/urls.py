@@ -21,12 +21,16 @@ urlpatterns = [
     path('user', UserView.as_view()),
     path('logout', LogoutView.as_view()),
     path('refresh', RefreshView.as_view()),
+
     path('projects/', ProjectList.as_view()),
     path('projects/<int:project_pk>', ProjectDetail.as_view()),
+
     path('projects/<int:project_pk>/criteria/', CriterionList.as_view()),
     path('criteria/<int:criterion_pk>', CriterionDetail.as_view()),
-    path('alternatives/', AlternativeList.as_view()),
-    path('alternatives/', AlternativeDetail.as_view()),
+
+    path('projects/<int:project_pk>/alternatives/', AlternativeList.as_view()),
+    path('alternatives/<int:alternative_pk>', AlternativeDetail.as_view()),
+
     path('performances/', PerformanceList.as_view()),
     path('performances/', PerformanceDetail.as_view()),
     path('criteria_functions/', CriterionFunctionList.as_view()),
