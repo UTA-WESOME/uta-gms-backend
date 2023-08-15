@@ -18,7 +18,7 @@ from .models import (
     CriterionFunction,
     HasseGraph
 )
-from .permissions import IsOwnerOfProject, IsLogged
+from .permissions import IsOwnerOfProject, IsLogged, IsOwnerOfCriterion
 from .serializers import (
     UserSerializer,
     ProjectSerializer,
@@ -173,19 +173,32 @@ class ProjectList(generics.ListCreateAPIView):
 
 class ProjectDetail(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsOwnerOfProject]
-    queryset = Project.objects.all()
     serializer_class = ProjectSerializer
+    queryset = Project.objects.all()
+    lookup_url_kwarg = 'project_pk'
 
 
 # Criterion
 class CriterionList(generics.ListCreateAPIView):
-    queryset = Criterion.objects.all()
+    permission_classes = [IsOwnerOfProject]
     serializer_class = CriterionSerializer
+
+    def get_queryset(self):
+        project_id = self.kwargs.get("project_pk")
+        criteria = Criterion.objects.filter(project=project_id)
+        return criteria
+
+    def perform_create(self, serializer):
+        project_id = self.kwargs.get("project_pk")
+        project = Project.objects.filter(id=project_id).first()
+        serializer.save(project=project)
 
 
 class CriterionDetail(generics.RetrieveUpdateDestroyAPIView):
-    queryset = Criterion.objects.all()
+    permission_classes = [IsOwnerOfCriterion]
     serializer_class = CriterionSerializer
+    queryset = Criterion.objects.all()
+    lookup_url_kwarg = 'criterion_pk'
 
 
 # Alternative
