@@ -31,8 +31,9 @@ urlpatterns = [
     path('projects/<int:project_pk>/alternatives/', AlternativeList.as_view()),
     path('alternatives/<int:alternative_pk>', AlternativeDetail.as_view()),
 
-    path('performances/', PerformanceList.as_view()),
-    path('performances/', PerformanceDetail.as_view()),
+    path('alternatives/<int:alternative_pk>/performances/', PerformanceList.as_view()),
+    path('performances/<int:performance_pk>', PerformanceDetail.as_view()),
+
     path('criteria_functions/', CriterionFunctionList.as_view()),
     path('criteria_functions/', CriterionFunctionDetail.as_view()),
     path('hassegraphs/', HasseGraphList.as_view()),

@@ -231,8 +231,34 @@ class AlternativeDetail(generics.RetrieveUpdateDestroyAPIView):
 
 # Performance
 class PerformanceList(generics.ListCreateAPIView):
-    queryset = Performance.objects.all()
+    permission_classes = [IsOwnerOfAlternative]
     serializer_class = PerformanceSerializer
+
+    def get_queryset(self):
+        alternative_id = self.kwargs.get("alternative_pk")
+        performances = Performance.objects.filter(alternative=alternative_id)
+        return performances
+
+    def perform_create(self, serializer):
+
+        # get alternative
+        alternative_id = self.kwargs.get("alternative_pk")
+        alternative = Alternative.objects.filter(id=alternative_id).first()
+
+        # get criterion
+        criterion = serializer.validated_data.get('criterion')
+
+        # check if alternative and criterion are in the same project
+        if criterion.project != alternative.project:
+            raise ValidationError({"details": "alternative and criterion do not belong to the same project"})
+
+        # check if there exists a performance with this alternative and criterion
+        performance = Performance.objects.filter(alternative=alternative).filter(criterion=criterion).first()
+        if performance:
+            raise ValidationError({"details": "performance for this alternative and criterion already exists"})
+
+        # save the performance
+        serializer.save(alternative=alternative)
 
 
 class PerformanceDetail(generics.RetrieveUpdateDestroyAPIView):

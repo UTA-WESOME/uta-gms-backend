@@ -63,7 +63,8 @@ class PerformanceSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = models.Performance
-        fields = "__all__"
+        exclude = ['alternative']
+        # fields = "__all__"
 
 
 class CriterionFunctionSerializer(serializers.ModelSerializer):
