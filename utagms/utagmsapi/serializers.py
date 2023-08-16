@@ -25,6 +25,7 @@ class ProjectSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.Project
         exclude = ['user']
+        optional_fields = ['description']
         # fields = "__all__"
 
 

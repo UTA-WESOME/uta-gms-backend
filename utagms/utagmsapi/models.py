@@ -15,7 +15,7 @@ class User(models.Model):
 
 class Project(models.Model):
     name = models.CharField(max_length=64, help_text="Project name")
-    description = models.CharField(max_length=256, help_text="Project description")
+    description = models.CharField(max_length=256, help_text="Project description", blank=True)
     shareable = models.BooleanField(help_text="Project shareability")
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="projects")
     created_at = models.DateTimeField(auto_now_add=True)
