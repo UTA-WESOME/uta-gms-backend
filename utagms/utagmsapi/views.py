@@ -22,7 +22,8 @@ from .permissions import (
     IsOwnerOfProject,
     IsLogged,
     IsOwnerOfCriterion,
-    IsOwnerOfAlternative
+    IsOwnerOfAlternative,
+    IsOwnerOfPerformance
 )
 from .serializers import (
     UserSerializer,
@@ -31,7 +32,7 @@ from .serializers import (
     AlternativeSerializer,
     PerformanceSerializer,
     CriterionFunctionSerializer,
-    HasseGraphSerializer
+    HasseGraphSerializer, PerformanceSerializerUpdate
 )
 
 
@@ -262,8 +263,10 @@ class PerformanceList(generics.ListCreateAPIView):
 
 
 class PerformanceDetail(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsOwnerOfPerformance]
+    serializer_class = PerformanceSerializerUpdate
     queryset = Performance.objects.all()
-    serializer_class = PerformanceSerializer
+    lookup_url_kwarg = 'performance_pk'
 
 
 # CriterionFunction

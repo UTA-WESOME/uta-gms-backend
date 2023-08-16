@@ -67,6 +67,18 @@ class PerformanceSerializer(serializers.ModelSerializer):
         # fields = "__all__"
 
 
+class PerformanceSerializerUpdate(serializers.ModelSerializer):
+    value = serializers.FloatField(help_text="Performance value")
+
+    class Meta:
+        model = models.Performance
+        fields = "__all__"
+        extra_kwargs = {
+            'criterion': {'read_only': True},
+            'alternative': {'read_only': True}
+        }
+
+
 class CriterionFunctionSerializer(serializers.ModelSerializer):
     ordinate = serializers.FloatField(help_text="Ordinate")
     abscissa = serializers.FloatField(help_text="Abscissa")
