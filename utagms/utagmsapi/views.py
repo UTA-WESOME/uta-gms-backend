@@ -32,7 +32,8 @@ from .serializers import (
     AlternativeSerializer,
     PerformanceSerializer,
     CriterionFunctionSerializer,
-    HasseGraphSerializer, PerformanceSerializerUpdate
+    HasseGraphSerializer,
+    PerformanceSerializerUpdate
 )
 
 
