@@ -43,7 +43,8 @@ class CriterionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = models.Criterion
-        fields = "__all__"
+        exclude = ['project']
+        # fields = "__all__"
 
 
 class AlternativeSerializer(serializers.ModelSerializer):
@@ -53,7 +54,8 @@ class AlternativeSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = models.Alternative
-        fields = "__all__"
+        exclude = ['project']
+        # fields = "__all__"
 
 
 class PerformanceSerializer(serializers.ModelSerializer):
@@ -61,7 +63,20 @@ class PerformanceSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = models.Performance
+        exclude = ['alternative']
+        # fields = "__all__"
+
+
+class PerformanceSerializerUpdate(serializers.ModelSerializer):
+    value = serializers.FloatField(help_text="Performance value")
+
+    class Meta:
+        model = models.Performance
         fields = "__all__"
+        extra_kwargs = {
+            'criterion': {'read_only': True},
+            'alternative': {'read_only': True}
+        }
 
 
 class CriterionFunctionSerializer(serializers.ModelSerializer):

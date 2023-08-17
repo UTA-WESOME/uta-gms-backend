@@ -18,7 +18,13 @@ from .models import (
     CriterionFunction,
     HasseGraph
 )
-from .permissions import IsOwnerOfProject, IsLogged
+from .permissions import (
+    IsOwnerOfProject,
+    IsLogged,
+    IsOwnerOfCriterion,
+    IsOwnerOfAlternative,
+    IsOwnerOfPerformance
+)
 from .serializers import (
     UserSerializer,
     ProjectSerializer,
@@ -26,7 +32,8 @@ from .serializers import (
     AlternativeSerializer,
     PerformanceSerializer,
     CriterionFunctionSerializer,
-    HasseGraphSerializer
+    HasseGraphSerializer,
+    PerformanceSerializerUpdate
 )
 
 
@@ -173,41 +180,94 @@ class ProjectList(generics.ListCreateAPIView):
 
 class ProjectDetail(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsOwnerOfProject]
-    queryset = Project.objects.all()
     serializer_class = ProjectSerializer
+    queryset = Project.objects.all()
+    lookup_url_kwarg = 'project_pk'
 
 
 # Criterion
 class CriterionList(generics.ListCreateAPIView):
-    queryset = Criterion.objects.all()
+    permission_classes = [IsOwnerOfProject]
     serializer_class = CriterionSerializer
+
+    def get_queryset(self):
+        project_id = self.kwargs.get("project_pk")
+        criteria = Criterion.objects.filter(project=project_id)
+        return criteria
+
+    def perform_create(self, serializer):
+        project_id = self.kwargs.get("project_pk")
+        project = Project.objects.filter(id=project_id).first()
+        serializer.save(project=project)
 
 
 class CriterionDetail(generics.RetrieveUpdateDestroyAPIView):
-    queryset = Criterion.objects.all()
+    permission_classes = [IsOwnerOfCriterion]
     serializer_class = CriterionSerializer
+    queryset = Criterion.objects.all()
+    lookup_url_kwarg = 'criterion_pk'
 
 
 # Alternative
 class AlternativeList(generics.ListCreateAPIView):
-    queryset = Alternative.objects.all()
+    permission_classes = [IsOwnerOfProject]
     serializer_class = AlternativeSerializer
+
+    def get_queryset(self):
+        project_id = self.kwargs.get("project_pk")
+        alternatives = Alternative.objects.filter(project=project_id)
+        return alternatives
+
+    def perform_create(self, serializer):
+        project_id = self.kwargs.get("project_pk")
+        project = Project.objects.filter(id=project_id).first()
+        serializer.save(project=project)
 
 
 class AlternativeDetail(generics.RetrieveUpdateDestroyAPIView):
-    queryset = Alternative.objects.all()
+    permission_classes = [IsOwnerOfAlternative]
     serializer_class = AlternativeSerializer
+    queryset = Alternative.objects.all()
+    lookup_url_kwarg = 'alternative_pk'
 
 
 # Performance
 class PerformanceList(generics.ListCreateAPIView):
-    queryset = Performance.objects.all()
+    permission_classes = [IsOwnerOfAlternative]
     serializer_class = PerformanceSerializer
+
+    def get_queryset(self):
+        alternative_id = self.kwargs.get("alternative_pk")
+        performances = Performance.objects.filter(alternative=alternative_id)
+        return performances
+
+    def perform_create(self, serializer):
+
+        # get alternative
+        alternative_id = self.kwargs.get("alternative_pk")
+        alternative = Alternative.objects.filter(id=alternative_id).first()
+
+        # get criterion
+        criterion = serializer.validated_data.get('criterion')
+
+        # check if alternative and criterion are in the same project
+        if criterion.project != alternative.project:
+            raise ValidationError({"details": "alternative and criterion do not belong to the same project"})
+
+        # check if there exists a performance with this alternative and criterion
+        performance = Performance.objects.filter(alternative=alternative).filter(criterion=criterion).first()
+        if performance:
+            raise ValidationError({"details": "performance for this alternative and criterion already exists"})
+
+        # save the performance
+        serializer.save(alternative=alternative)
 
 
 class PerformanceDetail(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsOwnerOfPerformance]
+    serializer_class = PerformanceSerializerUpdate
     queryset = Performance.objects.all()
-    serializer_class = PerformanceSerializer
+    lookup_url_kwarg = 'performance_pk'
 
 
 # CriterionFunction
