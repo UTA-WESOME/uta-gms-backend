@@ -13,7 +13,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='criterion',
             name='linear_segments',
-            field=models.IntegerField(default=0, help_text='How many linear segments does criterion have'),
+            field=models.IntegerField(default=0, help_text='How many linear segments does the criterion have'),
             preserve_default=False,
         ),
     ]
