@@ -29,7 +29,7 @@ class Criterion(models.Model):
     name = models.CharField(max_length=64, help_text="Criterion name")
     gain = models.BooleanField(help_text="Criterion is the type of gain")
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="criteria")
-    linear_segments = models.IntegerField(help_text="How many linear segments does criterion have")
+    linear_segments = models.IntegerField(help_text="How many linear segments does the criterion have")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
