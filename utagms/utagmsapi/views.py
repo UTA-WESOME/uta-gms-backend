@@ -227,7 +227,21 @@ class ProjectUpdate(APIView):
                 alternative_serializer = AlternativeSerializer(data=alternative_data)
 
             if alternative_serializer.is_valid():
-                alternative_serializer.save(project=project)
+                alternative = alternative_serializer.save(project=project)
+
+                # Performances for this alternative
+                performances_data = alternative_data.get('performances', [])
+                for performance_data in performances_data:
+                    performance_id = performance_data.get('id')
+
+                    try:
+                        performance = alternative.performances.get(id=performance_id)
+                        performance_serializer = PerformanceSerializer(performance, data=performance_data)
+                    except Performance.DoesNotExist:
+                        performance_serializer = PerformanceSerializer(data=performance_data)
+
+                    if performance_serializer.is_valid():
+                        performance_serializer.save(alternative=alternative)
 
         return Response({"message": "Data updated successfully"})
 
