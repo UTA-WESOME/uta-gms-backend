@@ -190,25 +190,44 @@ class ProjectUpdate(APIView):
         # Criteria
         # if there are criteria that were not in the payload, we delete them
         criteria_ids_db = project.criteria.values_list('id', flat=True)
-        criteria_ids_request = [criterion_data.get("id", None) for criterion_data in criteria_data]
+        criteria_ids_request = [criterion_data.get('id') for criterion_data in criteria_data]
         criteria_ids_to_delete = set(criteria_ids_db) - set(criteria_ids_request)
         project.criteria.filter(id__in=criteria_ids_to_delete).delete()
 
         # if there exists a criterion with provided ID in the project, we update it
         # if there does not exist a criterion with provided ID in the project, we insert it (with a new id)
         for criterion_data in criteria_data:
-            criterion_id = criterion_data.get("id")
-            criterion_data_copy = criterion_data.copy()
+            criterion_id = criterion_data.get('id')
 
             try:
                 criterion = project.criteria.get(id=criterion_id)
-                criterion_data_copy.pop('id')
-                criterion_serializer = CriterionSerializer(criterion, data=criterion_data_copy)
+                criterion_serializer = CriterionSerializer(criterion, data=criterion_data)
             except Criterion.DoesNotExist:
-                criterion_serializer = CriterionSerializer(data=criterion_data_copy)
+                criterion_serializer = CriterionSerializer(data=criterion_data)
 
             if criterion_serializer.is_valid():
                 criterion_serializer.save(project=project)
+
+        # Alternatives
+        # if there are alternatives that were not in the payload, we delete them
+        alternatives_ids_db = project.alternatives.values_list('id', flat=True)
+        alternatives_ids_request = [alternative_data.get('id') for alternative_data in alternatives_data]
+        alternatives_ids_to_delete = set(alternatives_ids_db) - set(alternatives_ids_request)
+        project.alternatives.filter(id__in=alternatives_ids_to_delete).delete()
+
+        # if there exists an alternative with provided ID in the project, we update it
+        # if there does not exist an alternative with provided ID in the project, we insert it (with a new id)
+        for alternative_data in alternatives_data:
+            alternative_id = alternative_data.get('id')
+
+            try:
+                alternative = project.alternatives.get(id=alternative_id)
+                alternative_serializer = AlternativeSerializer(alternative, data=alternative_data)
+            except Alternative.DoesNotExist:
+                alternative_serializer = AlternativeSerializer(data=alternative_data)
+
+            if alternative_serializer.is_valid():
+                alternative_serializer.save(project=project)
 
         return Response({"message": "Data updated successfully"})
 
