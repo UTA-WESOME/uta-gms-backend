@@ -176,6 +176,43 @@ class ProjectDetail(generics.RetrieveUpdateDestroyAPIView):
     lookup_url_kwarg = 'project_pk'
 
 
+class ProjectUpdate(APIView):
+    permission_classes = [IsOwnerOfProject]
+
+    def patch(self, request, *args, **kwargs):
+        data = request.data
+        project_id = kwargs.get("project_pk")
+        project = Project.objects.filter(id=project_id).first()
+
+        criteria_data = data.get("criteria", [])
+        alternatives_data = data.get("alternatives", [])
+
+        # Criteria
+        # if there are criteria that were not in the payload, we delete them
+        criteria_ids_db = project.criteria.values_list('id', flat=True)
+        criteria_ids_request = [criterion_data.get("id", None) for criterion_data in criteria_data]
+        criteria_ids_to_delete = set(criteria_ids_db) - set(criteria_ids_request)
+        project.criteria.filter(id__in=criteria_ids_to_delete).delete()
+
+        # if there exists a criterion with provided ID in the project, we update it
+        # if there does not exist a criterion with provided ID in the project, we insert it (with a new id)
+        for criterion_data in criteria_data:
+            criterion_id = criterion_data.get("id")
+            criterion_data_copy = criterion_data.copy()
+
+            try:
+                criterion = project.criteria.get(id=criterion_id)
+                criterion_data_copy.pop('id')
+                criterion_serializer = CriterionSerializer(criterion, data=criterion_data_copy)
+            except Criterion.DoesNotExist:
+                criterion_serializer = CriterionSerializer(data=criterion_data_copy)
+
+            if criterion_serializer.is_valid():
+                criterion_serializer.save(project=project)
+
+        return Response({"message": "Data updated successfully"})
+
+
 # Criterion
 class CriterionList(generics.ListCreateAPIView):
     permission_classes = [IsOwnerOfProject]
