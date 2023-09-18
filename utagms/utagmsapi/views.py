@@ -206,7 +206,14 @@ class ProjectUpdate(APIView):
                 criterion_serializer = CriterionSerializer(data=criterion_data)
 
             if criterion_serializer.is_valid():
-                criterion_serializer.save(project=project)
+                criterion = criterion_serializer.save(project=project)
+
+                # update criterion id in performances
+                for alternative_data in alternatives_data:
+                    performances_data = alternative_data.get('performances', [])
+                    for performance_data in performances_data:
+                        if performance_data.get('criterion', -1) == criterion_id:
+                            performance_data['criterion'] = criterion.id
 
         # Alternatives
         # if there are alternatives that were not in the payload, we delete them
@@ -242,6 +249,8 @@ class ProjectUpdate(APIView):
 
                     if performance_serializer.is_valid():
                         performance_serializer.save(alternative=alternative)
+                    else:
+                        print(f'{performance_serializer=}')
 
         return Response({"message": "Data updated successfully"})
 
