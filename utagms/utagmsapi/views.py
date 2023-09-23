@@ -249,10 +249,20 @@ class ProjectUpdate(APIView):
 
                     if performance_serializer.is_valid():
                         performance_serializer.save(alternative=alternative)
-                    else:
-                        print(f'{performance_serializer=}')
 
         return Response({"message": "Data updated successfully"})
+
+
+class ProjectResults(APIView):
+    permission_classes = [IsOwnerOfProject]
+
+    def get(self, request, *args, **kwargs):
+        project_id = kwargs.get('project_pk')
+        project = Project.objects.filter(id=project_id).first()
+
+        # TODO
+
+        return Response({"message": "Calculations results"})
 
 
 # Criterion
