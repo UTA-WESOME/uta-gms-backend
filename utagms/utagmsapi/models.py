@@ -1,4 +1,4 @@
-from django.core.validators import MinValueValidator
+from django.core.validators import MinValueValidator, MaxValueValidator
 from django.db import models
 
 
@@ -31,8 +31,11 @@ class Criterion(models.Model):
     gain = models.BooleanField(help_text="Criterion is the type of gain")
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="criteria")
     linear_segments = models.IntegerField(help_text="How many linear segments does the criterion have")
-    weight = models.IntegerField(default=1, help_text="Weight of the criterion",
-                                 validators=[MinValueValidator(1, "Weight must be at least 1")])
+    weight = models.FloatField(
+        default=1.0,
+        help_text="Weight of the criterion",
+        validators=[MinValueValidator(0.0, "Weight must be at least 0")]
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
