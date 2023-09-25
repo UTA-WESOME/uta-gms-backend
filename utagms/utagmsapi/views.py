@@ -7,6 +7,7 @@ from rest_framework import generics
 from rest_framework.exceptions import AuthenticationFailed, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from utagmsengine.solver import Solver
 
 from utagmsapi.utils.jwt import get_user_from_jwt
 from .models import (
@@ -260,9 +261,66 @@ class ProjectResults(APIView):
         project_id = kwargs.get('project_pk')
         project = Project.objects.filter(id=project_id).first()
 
-        # TODO
+        # get gain
+        gain_list = Criterion.objects.filter(project=project).order_by('id').values_list('gain', flat=True)
+        gain_list = [1 if gain else 0 for gain in gain_list]
 
-        return Response({"message": "Calculations results"})
+        # get weights
+        weights_list = Criterion.objects.filter(project=project).order_by('id').values_list('weight', flat=True)
+
+        # get alternatives
+        alternatives = Alternative.objects.filter(project=project).order_by('id')
+        alternatives_id_list = [str(_id) for _id in
+                                Alternative.objects.filter(project=project).order_by('id').values_list('id', flat=True)]
+
+        # get performances
+        performances_table = []
+        for alternative in alternatives:
+            performances = Performance.objects.filter(alternative=alternative).order_by('criterion_id').values_list(
+                'value', flat=True)
+            performances_table.append(performances)
+
+        # get preferences and indifferences
+        # first, we get unique reference_ranking values and sort it
+        ref_ranking_unique_values = set(
+            Alternative.objects.filter(project=project).values_list('reference_ranking', flat=True))
+        ref_ranking_unique_list_sorted = sorted(ref_ranking_unique_values)
+
+        preferences_list = []
+        indifferences_list = []
+        # now we need to check every alternative and find other alternatives that are below this alternative in
+        # reference_ranking
+        for i_alternative_1, alternative_1 in enumerate(alternatives):
+
+            # 0 in reference_ranking means that it was not placed in the reference ranking
+            if alternative_1.reference_ranking == 0:
+                continue
+
+            ref_ranking_index = ref_ranking_unique_list_sorted.index(alternative_1.reference_ranking)
+            if ref_ranking_index < len(ref_ranking_unique_list_sorted) - 1:
+                for i_alternative_2, alternative_2 in enumerate(alternatives):
+
+                    if i_alternative_1 == i_alternative_2:
+                        continue
+
+                    if alternative_2.reference_ranking == ref_ranking_unique_list_sorted[ref_ranking_index + 1]:
+                        preferences_list.append([i_alternative_1, i_alternative_2])
+
+                    if alternative_2.reference_ranking == ref_ranking_unique_list_sorted[ref_ranking_index]:
+                        indifferences_list.append([i_alternative_1, i_alternative_2])
+
+        solver = Solver()
+
+        ranking = solver.get_ranking_dict(
+            performances_table,
+            alternatives_id_list,
+            preferences_list,
+            indifferences_list,
+            weights_list,
+            gain_list,
+        )
+
+        return Response({"ranking": ranking})
 
 
 # Criterion
