@@ -32,12 +32,9 @@ class Criterion(models.Model):
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="criteria")
     linear_segments = models.IntegerField(help_text="How many linear segments does the criterion have")
     weight = models.FloatField(
-        default=0.0,
+        default=1.0,
         help_text="Weight of the criterion",
-        validators=[
-            MinValueValidator(0.0, "Weight must be at least 0"),
-            MaxValueValidator(1.0, "Weight must be at most 1")
-        ]
+        validators=[MinValueValidator(0.0, "Weight must be at least 0")]
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
