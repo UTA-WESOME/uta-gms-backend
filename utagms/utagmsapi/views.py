@@ -257,7 +257,7 @@ class ProjectUpdate(APIView):
 class ProjectResults(APIView):
     permission_classes = [IsOwnerOfProject]
 
-    def get(self, request, *args, **kwargs):
+    def post(self, request, *args, **kwargs):
         project_id = kwargs.get('project_pk')
         project = Project.objects.filter(id=project_id).first()
 
@@ -265,8 +265,9 @@ class ProjectResults(APIView):
         gain_list = Criterion.objects.filter(project=project).order_by('id').values_list('gain', flat=True)
         gain_list = [1 if gain else 0 for gain in gain_list]
 
-        # get weights
+        # get weights and normalize them
         weights_list = Criterion.objects.filter(project=project).order_by('id').values_list('weight', flat=True)
+        weights_list = [weight / sum(weights_list) for weight in weights_list]
 
         # get alternatives
         alternatives = Alternative.objects.filter(project=project).order_by('id')
@@ -276,14 +277,18 @@ class ProjectResults(APIView):
         # get performances
         performances_table = []
         for alternative in alternatives:
-            performances = Performance.objects.filter(alternative=alternative).order_by('criterion_id').values_list(
-                'value', flat=True)
+            performances = Performance.objects\
+                .filter(alternative=alternative)\
+                .order_by('criterion_id')\
+                .values_list('value', flat=True)
             performances_table.append(performances)
 
         # get preferences and indifferences
         # first, we get unique reference_ranking values and sort it
-        ref_ranking_unique_values = set(
-            Alternative.objects.filter(project=project).values_list('reference_ranking', flat=True))
+        ref_ranking_unique_values = set(Alternative.objects
+                                        .filter(project=project)
+                                        .values_list('reference_ranking', flat=True)
+                                        )
         ref_ranking_unique_list_sorted = sorted(ref_ranking_unique_values)
 
         preferences_list = []
@@ -320,7 +325,16 @@ class ProjectResults(APIView):
             gain_list,
         )
 
-        return Response({"ranking": ranking})
+        # updating alternatives with ranking values
+        for i, (key, value) in enumerate(sorted(ranking.items(), key=lambda x: -x[1]), start=1):
+            alternative = Alternative.objects.filter(id=int(key)).first()
+            alternative.ranking = i
+            alternative.save()
+
+        alternatives = Alternative.objects.filter(project=project)
+        serializer = AlternativeSerializer(alternatives, many=True)
+
+        return Response(serializer.data)
 
 
 # Criterion
