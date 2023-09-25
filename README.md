@@ -7,4 +7,4 @@ docker-compose up --build
 ```
 
 ## Database Schema
-<img src="/dbSchema.png" />
+![database schema](./dbSchema.png)
