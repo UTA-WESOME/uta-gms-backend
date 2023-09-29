@@ -1,7 +1,7 @@
 import jwt
 from rest_framework import permissions
 
-from utagmsapi.models import Project, Criterion, Alternative, Performance
+from utagmsapi.models import Project, Criterion, Alternative, Performance, PreferenceIntensity
 from utagmsapi.utils.jwt import get_user_from_jwt
 
 
@@ -114,3 +114,25 @@ class IsOwnerOfPerformance(permissions.BasePermission):
 
         # check if performance belongs to the user
         return performance.alternative.project.user == user
+
+
+class IsOwnerOfPreferenceIntensity(permissions.BasePermission):
+
+    def has_permission(self, request, view):
+
+        # get user
+        token = request.COOKIES.get('access_token')
+        if token is None:
+            return False
+        try:
+            user = get_user_from_jwt(token)
+        except (jwt.ExpiredSignatureError, jwt.InvalidSignatureError):
+            return False
+
+        # get preference intensity
+        preference_intensity_pk = view.kwargs.get('preference_intensity_pk')
+        if preference_intensity_pk is None:
+            return False
+        preference_intensity = PreferenceIntensity.objects.filter(id=preference_intensity_pk).first()
+
+        return preference_intensity.project.user == user
