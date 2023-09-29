@@ -72,3 +72,9 @@ class HasseGraphSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.HasseGraph
         fields = "__all__"
+
+
+class PreferenceIntensitySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.PreferenceIntensity
+        exclude = ['project']

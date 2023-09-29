@@ -16,14 +16,16 @@ from .models import (
     Alternative,
     Performance,
     CriterionFunction,
-    HasseGraph
+    HasseGraph,
+    PreferenceIntensity
 )
 from .permissions import (
     IsOwnerOfProject,
     IsLogged,
     IsOwnerOfCriterion,
     IsOwnerOfAlternative,
-    IsOwnerOfPerformance
+    IsOwnerOfPerformance,
+    IsOwnerOfPreferenceIntensity
 )
 from .serializers import (
     UserSerializer,
@@ -33,7 +35,8 @@ from .serializers import (
     PerformanceSerializer,
     CriterionFunctionSerializer,
     HasseGraphSerializer,
-    PerformanceSerializerUpdate
+    PerformanceSerializerUpdate,
+    PreferenceIntensitySerializer
 )
 
 
@@ -360,3 +363,26 @@ class HasseGraphList(generics.ListCreateAPIView):
 class HasseGraphDetail(generics.RetrieveUpdateDestroyAPIView):
     queryset = HasseGraph.objects.all()
     serializer_class = HasseGraphSerializer
+
+
+# PreferenceIntensity
+class PreferenceIntensityList(generics.ListCreateAPIView):
+    permission_classes = [IsOwnerOfProject]
+    serializer_class = PreferenceIntensitySerializer
+
+    def get_queryset(self):
+        project_id = self.kwargs.get('project_pk')
+        preference_intensities = PreferenceIntensity.objects.filter(project=project_id)
+        return preference_intensities
+
+    def perform_create(self, serializer):
+        project_id = self.kwargs.get('project_pk')
+        project = Project.objects.filter(id=project_id).first()
+        serializer.save(project=project)
+
+
+class PreferenceIntensityDetail(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsOwnerOfPreferenceIntensity]
+    serializer_class = PreferenceIntensitySerializer
+    queryset = PreferenceIntensity.objects.all()
+    lookup_url_kwarg = 'preference_intensity_pk'
