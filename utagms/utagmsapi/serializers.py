@@ -1,5 +1,6 @@
 from django.contrib.auth.hashers import make_password
 from rest_framework import serializers
+from rest_framework.exceptions import ValidationError
 
 from utagmsapi import models
 
@@ -78,3 +79,23 @@ class PreferenceIntensitySerializer(serializers.ModelSerializer):
     class Meta:
         model = models.PreferenceIntensity
         exclude = ['project']
+
+    def save(self, **kwargs):
+
+        # we need to check if all four alternatives and criterion belong to the same project as specified in the URL
+        project = kwargs.get('project')
+        if project:
+            # Get four alternatives
+            alternatives = [self.validated_data.get(f'alternative_{_id}') for _id in range(1, 5)]
+            # Get criterion
+            criterion = self.validated_data.get('criterion')
+
+            alternatives_invalid = any(
+                [True if alternative.project != project else False for alternative in alternatives])
+            if alternatives_invalid or criterion.project != project:
+                raise ValidationError(
+                    {
+                        "details": "The alternatives and criterion must belong to the same project as preference intensity."}
+                )
+
+        super().save(**kwargs)

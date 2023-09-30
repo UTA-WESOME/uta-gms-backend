@@ -12,7 +12,15 @@ from .views import (
     CriterionFunctionList,
     CriterionFunctionDetail,
     HasseGraphList,
-    HasseGraphDetail, RegisterView, LoginView, UserView, LogoutView, RefreshView, ProjectUpdate
+    HasseGraphDetail,
+    RegisterView,
+    LoginView,
+    UserView,
+    LogoutView,
+    RefreshView,
+    ProjectUpdate,
+    PreferenceIntensityList,
+    PreferenceIntensityDetail
 )
 
 urlpatterns = [
@@ -39,4 +47,7 @@ urlpatterns = [
     path('criteria_functions/', CriterionFunctionDetail.as_view()),
     path('hassegraphs/', HasseGraphList.as_view()),
     path('hassegraphs/', HasseGraphDetail.as_view()),
+
+    path('projects/<int:project_pk>/preference_intensities/', PreferenceIntensityList.as_view()),
+    path('preference_intensities/<int:preference_intensity_pk>', PreferenceIntensityDetail.as_view())
 ]
