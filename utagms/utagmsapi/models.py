@@ -1,4 +1,4 @@
-from django.core.validators import MinValueValidator, MaxValueValidator
+from django.core.validators import MinValueValidator
 from django.db import models
 
 
@@ -90,14 +90,14 @@ class HasseGraph(models.Model):
 
 class PreferenceIntensity(models.Model):
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="preference_intensities")
-    alternative_id_1 = models.ForeignKey(Alternative, on_delete=models.CASCADE, related_name="preference_intensities_1")
-    alternative_id_2 = models.ForeignKey(Alternative, on_delete=models.CASCADE, related_name="preference_intensities_2")
-    alternative_id_3 = models.ForeignKey(Alternative, on_delete=models.CASCADE, related_name="preference_intensities_3")
-    alternative_id_4 = models.ForeignKey(Alternative, on_delete=models.CASCADE, related_name="preference_intensities_4")
-    criterion_id = models.ForeignKey(Criterion, on_delete=models.CASCADE, null=True,
-                                     related_name="preference_intensities")
+    alternative_1 = models.ForeignKey(Alternative, on_delete=models.CASCADE, related_name="preference_intensities_1")
+    alternative_2 = models.ForeignKey(Alternative, on_delete=models.CASCADE, related_name="preference_intensities_2")
+    alternative_3 = models.ForeignKey(Alternative, on_delete=models.CASCADE, related_name="preference_intensities_3")
+    alternative_4 = models.ForeignKey(Alternative, on_delete=models.CASCADE, related_name="preference_intensities_4")
+    criterion = models.ForeignKey(Criterion, on_delete=models.CASCADE, null=True,
+                                  related_name="preference_intensities")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ('project', 'criterion_id',)
+        ordering = ('project', 'criterion',)
