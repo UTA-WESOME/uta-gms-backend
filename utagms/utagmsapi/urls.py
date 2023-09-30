@@ -12,7 +12,8 @@ from .views import (
     CriterionFunctionList,
     CriterionFunctionDetail,
     HasseGraphList,
-    HasseGraphDetail, RegisterView, LoginView, UserView, LogoutView, RefreshView, ProjectUpdate
+    HasseGraphDetail, RegisterView, LoginView, UserView, LogoutView, RefreshView, ProjectUpdate,
+    parse_file
 )
 
 urlpatterns = [
@@ -39,4 +40,6 @@ urlpatterns = [
     path('criteria_functions/', CriterionFunctionDetail.as_view()),
     path('hassegraphs/', HasseGraphList.as_view()),
     path('hassegraphs/', HasseGraphDetail.as_view()),
+
+    path('upload', parse_file, name='parse_file'),
 ]

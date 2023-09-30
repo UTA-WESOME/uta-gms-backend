@@ -3,10 +3,13 @@ import datetime
 import jwt
 from django.conf import settings
 from django.contrib.auth.hashers import check_password
+from django.views.decorators.csrf import csrf_exempt
 from rest_framework import generics
 from rest_framework.exceptions import AuthenticationFailed, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from django.http import JsonResponse
+from utagmsengine.solver import Solver
 
 from utagmsapi.utils.jwt import get_user_from_jwt
 from .models import (
@@ -360,3 +363,14 @@ class HasseGraphList(generics.ListCreateAPIView):
 class HasseGraphDetail(generics.RetrieveUpdateDestroyAPIView):
     queryset = HasseGraph.objects.all()
     serializer_class = HasseGraphSerializer
+
+
+# FileUpload
+@csrf_exempt
+def parse_file(request):
+    if request.method == 'POST' and request.FILES.get('file'):
+        uploaded_file = request.FILES['file']
+        for chunk in uploaded_file.chunks():
+            print(chunk)
+        return JsonResponse({'message': 'File uploaded successfully'})
+    return JsonResponse({'message': 'No file selected or invalid request'}, status=400)
