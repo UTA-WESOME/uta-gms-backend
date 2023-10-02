@@ -92,10 +92,11 @@ class PreferenceIntensitySerializer(serializers.ModelSerializer):
 
             alternatives_invalid = any(
                 [True if alternative.project != project else False for alternative in alternatives])
-            if alternatives_invalid or criterion.project != project:
+            if alternatives_invalid or (criterion and criterion.project != project):
                 raise ValidationError(
                     {
-                        "details": "The alternatives and criterion must belong to the same project as preference intensity."}
+                        "details": "The alternatives and criterion must belong to the same project as preference intensity."
+                    }
                 )
 
         super().save(**kwargs)
