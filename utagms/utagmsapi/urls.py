@@ -19,6 +19,7 @@ from .views import (
     LogoutView,
     RefreshView,
     ProjectUpdate,
+    ProjectResults,
     PreferenceIntensityList,
     PreferenceIntensityDetail
 )
@@ -33,6 +34,7 @@ urlpatterns = [
     path('projects/', ProjectList.as_view()),
     path('projects/<int:project_pk>', ProjectDetail.as_view()),
     path('projects/<int:project_pk>/batch', ProjectUpdate.as_view()),
+    path('projects/<int:project_pk>/results', ProjectResults.as_view()),
 
     path('projects/<int:project_pk>/criteria/', CriterionList.as_view()),
     path('criteria/<int:criterion_pk>', CriterionDetail.as_view()),
