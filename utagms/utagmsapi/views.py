@@ -37,7 +37,8 @@ from .serializers import (
     CriterionFunctionSerializer,
     HasseGraphSerializer,
     PerformanceSerializerUpdate,
-    PreferenceIntensitySerializer
+    PreferenceIntensitySerializer,
+    AlternativeSerializerWithPerformances
 )
 
 
@@ -188,18 +189,20 @@ class ProjectBatch(APIView):
         project_id = kwargs.get('project_pk')
         project = Project.objects.filter(id=project_id).first()
 
+        # get data from db
         criteria = Criterion.objects.filter(project=project)
         alternatives = Alternative.objects.filter(project=project)
         pref_intensities = PreferenceIntensity.objects.filter(project=project)
 
+        # serialize data to json
         criteria_serializer = CriterionSerializer(criteria, many=True)
-        alternatives_serializer = AlternativeSerializer(alternatives, many=True)
+        alternatives_serializer = AlternativeSerializerWithPerformances(alternatives, many=True)
         pref_serializer = PreferenceIntensitySerializer(pref_intensities, many=True)
 
         return Response({
             "criteria": criteria_serializer.data,
             "alternatives": alternatives_serializer.data,
-            "pref_intensities": pref_serializer.data
+            "preference_intensities": pref_serializer.data
         })
 
     def patch(self, request, *args, **kwargs):
