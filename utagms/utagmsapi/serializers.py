@@ -3,6 +3,7 @@ from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 
 from utagmsapi import models
+from utagmsapi.models import Performance
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -42,6 +43,18 @@ class AlternativeSerializer(serializers.ModelSerializer):
         model = models.Alternative
         exclude = ['project']
         # fields = "__all__"
+
+
+class AlternativeSerializerWithPerformances(serializers.ModelSerializer):
+    performances = serializers.SerializerMethodField()
+
+    def get_performances(self, obj):
+        performances = Performance.objects.filter(alternative=obj)
+        return PerformanceSerializer(performances, many=True).data
+
+    class Meta:
+        model = models.Alternative
+        fields = '__all__'
 
 
 class PerformanceSerializer(serializers.ModelSerializer):
