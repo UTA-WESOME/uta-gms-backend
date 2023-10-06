@@ -19,7 +19,9 @@ from .views import (
     LogoutView,
     RefreshView,
     ProjectUpdate,
-    ProjectResults
+    ProjectResults,
+    PreferenceIntensityList,
+    PreferenceIntensityDetail
 )
 
 urlpatterns = [
@@ -47,4 +49,7 @@ urlpatterns = [
     path('criteria_functions/', CriterionFunctionDetail.as_view()),
     path('hassegraphs/', HasseGraphList.as_view()),
     path('hassegraphs/', HasseGraphDetail.as_view()),
+
+    path('projects/<int:project_pk>/preference_intensities/', PreferenceIntensityList.as_view()),
+    path('preference_intensities/<int:preference_intensity_pk>', PreferenceIntensityDetail.as_view())
 ]

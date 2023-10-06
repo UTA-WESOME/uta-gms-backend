@@ -17,14 +17,16 @@ from .models import (
     Alternative,
     Performance,
     CriterionFunction,
-    HasseGraph
+    HasseGraph,
+    PreferenceIntensity
 )
 from .permissions import (
     IsOwnerOfProject,
     IsLogged,
     IsOwnerOfCriterion,
     IsOwnerOfAlternative,
-    IsOwnerOfPerformance
+    IsOwnerOfPerformance,
+    IsOwnerOfPreferenceIntensity
 )
 from .serializers import (
     UserSerializer,
@@ -34,7 +36,8 @@ from .serializers import (
     PerformanceSerializer,
     CriterionFunctionSerializer,
     HasseGraphSerializer,
-    PerformanceSerializerUpdate
+    PerformanceSerializerUpdate,
+    PreferenceIntensitySerializer
 )
 
 
@@ -187,6 +190,7 @@ class ProjectUpdate(APIView):
 
         criteria_data = data.get("criteria", [])
         alternatives_data = data.get("alternatives", [])
+        pref_intensities_data = data.get("preference_intensities", [])
 
         # Criteria
         # if there are criteria that were not in the payload, we delete them
@@ -215,6 +219,11 @@ class ProjectUpdate(APIView):
                     for performance_data in performances_data:
                         if performance_data.get('criterion', -1) == criterion_id:
                             performance_data['criterion'] = criterion.id
+
+                # update criterion id in preference intensities
+                for pref_intensity_data in pref_intensities_data:
+                    if pref_intensity_data.get('criterion', -1) == criterion_id:
+                        pref_intensity_data['criterion'] = criterion.id
 
         # Alternatives
         # if there are alternatives that were not in the payload, we delete them
@@ -250,6 +259,33 @@ class ProjectUpdate(APIView):
 
                     if performance_serializer.is_valid():
                         performance_serializer.save(alternative=alternative)
+
+                # update alternatives id in preference intensities
+                for pref_intensity_data in pref_intensities_data:
+                    for alternative_number in range(1, 5):
+                        if pref_intensity_data.get(f'alternative_{alternative_number}', -1) == alternative_id:
+                            pref_intensity_data[f'alternative_{alternative_number}'] = alternative.id
+
+        # Preference intensities
+        # if there are preference intensities that were not in the payload, we delete them
+        pref_intensities_ids_db = project.preference_intensities.values_list('id', flat=True)
+        pref_intensities_ids_request = [pref_intensity_data.get('id') for pref_intensity_data in pref_intensities_data]
+        pref_intensities_ids_to_delete = set(pref_intensities_ids_db) - set(pref_intensities_ids_request)
+        project.preference_intensities.filter(id__in=pref_intensities_ids_to_delete).delete()
+
+        # if there exists a preference_intensity with provided ID in the project, we update it
+        # if there does not exist a preference_intensity with provided ID in the project, we insert it (with a new id)
+        for pref_intensity_data in pref_intensities_data:
+            pref_intensity_id = pref_intensity_data.get('id')
+
+            try:
+                pref_intensity = project.preference_intensities.get(id=pref_intensity_id)
+                pref_intensity_serializer = PreferenceIntensitySerializer(pref_intensity, data=pref_intensity_data)
+            except PreferenceIntensity.DoesNotExist:
+                pref_intensity_serializer = PreferenceIntensitySerializer(data=pref_intensity_data)
+
+            if pref_intensity_serializer.is_valid():
+                pref_intensity_serializer.save(project=project)
 
         return Response({"message": "Data updated successfully"})
 
@@ -442,3 +478,26 @@ class HasseGraphList(generics.ListCreateAPIView):
 class HasseGraphDetail(generics.RetrieveUpdateDestroyAPIView):
     queryset = HasseGraph.objects.all()
     serializer_class = HasseGraphSerializer
+
+
+# PreferenceIntensity
+class PreferenceIntensityList(generics.ListCreateAPIView):
+    permission_classes = [IsOwnerOfProject]
+    serializer_class = PreferenceIntensitySerializer
+
+    def get_queryset(self):
+        project_id = self.kwargs.get('project_pk')
+        preference_intensities = PreferenceIntensity.objects.filter(project=project_id)
+        return preference_intensities
+
+    def perform_create(self, serializer):
+        project_id = self.kwargs.get('project_pk')
+        project = Project.objects.filter(id=project_id).first()
+        serializer.save(project=project)
+
+
+class PreferenceIntensityDetail(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsOwnerOfPreferenceIntensity]
+    serializer_class = PreferenceIntensitySerializer
+    queryset = PreferenceIntensity.objects.all()
+    lookup_url_kwarg = 'preference_intensity_pk'
