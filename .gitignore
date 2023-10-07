@@ -162,3 +162,7 @@ cython_debug/
 
 # Postgres docker
 postgres_data/
+
+# custom engine builds
+engine/
+!engine/README.md
