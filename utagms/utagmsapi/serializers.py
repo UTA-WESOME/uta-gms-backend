@@ -63,6 +63,25 @@ class PerformanceSerializer(serializers.ModelSerializer):
         exclude = ['alternative']
         # fields = "__all__"
 
+    def save(self, **kwargs):
+
+        alternative = kwargs.get('alternative')
+        if alternative:
+
+            # get criterion
+            criterion = self.validated_data.get('criterion')
+
+            # check if alternative and criterion are in the same project
+            if criterion.project != alternative.project:
+                raise ValidationError({"details": "alternative and criterion do not belong to the same project"})
+
+            # check if there exists a performance with this alternative and criterion
+            performance = Performance.objects.filter(alternative=alternative).filter(criterion=criterion).first()
+            if performance:
+                raise ValidationError({"details": "performance for this alternative and criterion already exists"})
+
+        super().save(alternative=alternative)
+
 
 class PerformanceSerializerUpdate(serializers.ModelSerializer):
     value = serializers.FloatField(help_text="Performance value")
