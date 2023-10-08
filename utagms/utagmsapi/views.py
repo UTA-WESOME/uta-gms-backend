@@ -1,6 +1,7 @@
 import datetime
 
 import jwt
+import _io
 from django.conf import settings
 from django.contrib.auth.hashers import check_password
 from django.views.decorators.csrf import csrf_exempt
@@ -10,6 +11,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.http import JsonResponse
 from utagmsengine.solver import Solver
+from utagmsengine.parser import Parser
 
 from utagmsapi.utils.jwt import get_user_from_jwt
 from .models import (
@@ -370,7 +372,18 @@ class HasseGraphDetail(generics.RetrieveUpdateDestroyAPIView):
 def parse_file(request):
     if request.method == 'POST' and request.FILES.get('file'):
         uploaded_file = request.FILES['file']
-        for chunk in uploaded_file.chunks():
-            print(chunk)
+
+        parser = Parser()
+        uploaded_file_text = _io.TextIOWrapper(uploaded_file, encoding='utf-8')
+
+        alternatives_id_list = parser.get_alternatives_id_list_csv(uploaded_file_text)
+        type_of_criterion = parser.get_criteria_csv(uploaded_file_text)
+        performance_table_list = parser.get_performance_table_list_csv(uploaded_file_text)
+
+        print(alternatives_id_list)
+        print(type_of_criterion)
+        print(performance_table_list)
+
         return JsonResponse({'message': 'File uploaded successfully'})
+
     return JsonResponse({'message': 'No file selected or invalid request'}, status=400)
