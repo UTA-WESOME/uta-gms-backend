@@ -21,14 +21,16 @@ from .models import (
     Alternative,
     Performance,
     CriterionFunction,
-    HasseGraph
+    HasseGraph,
+    PreferenceIntensity
 )
 from .permissions import (
     IsOwnerOfProject,
     IsLogged,
     IsOwnerOfCriterion,
     IsOwnerOfAlternative,
-    IsOwnerOfPerformance
+    IsOwnerOfPerformance,
+    IsOwnerOfPreferenceIntensity
 )
 from .serializers import (
     UserSerializer,
@@ -38,7 +40,9 @@ from .serializers import (
     PerformanceSerializer,
     CriterionFunctionSerializer,
     HasseGraphSerializer,
-    PerformanceSerializerUpdate
+    PerformanceSerializerUpdate,
+    PreferenceIntensitySerializer,
+    AlternativeSerializerWithPerformances
 )
 
 
@@ -181,8 +185,29 @@ class ProjectDetail(generics.RetrieveUpdateDestroyAPIView):
     lookup_url_kwarg = 'project_pk'
 
 
-class ProjectUpdate(APIView):
+class ProjectBatch(APIView):
     permission_classes = [IsOwnerOfProject]
+
+    def get(self, request, *args, **kwargs):
+
+        project_id = kwargs.get('project_pk')
+        project = Project.objects.filter(id=project_id).first()
+
+        # get data from db
+        criteria = Criterion.objects.filter(project=project)
+        alternatives = Alternative.objects.filter(project=project)
+        pref_intensities = PreferenceIntensity.objects.filter(project=project)
+
+        # serialize data to json
+        criteria_serializer = CriterionSerializer(criteria, many=True)
+        alternatives_serializer = AlternativeSerializerWithPerformances(alternatives, many=True)
+        pref_serializer = PreferenceIntensitySerializer(pref_intensities, many=True)
+
+        return Response({
+            "criteria": criteria_serializer.data,
+            "alternatives": alternatives_serializer.data,
+            "preference_intensities": pref_serializer.data
+        })
 
     def patch(self, request, *args, **kwargs):
         data = request.data
@@ -191,6 +216,7 @@ class ProjectUpdate(APIView):
 
         criteria_data = data.get("criteria", [])
         alternatives_data = data.get("alternatives", [])
+        pref_intensities_data = data.get("preference_intensities", [])
 
         # Criteria
         # if there are criteria that were not in the payload, we delete them
@@ -219,6 +245,11 @@ class ProjectUpdate(APIView):
                     for performance_data in performances_data:
                         if performance_data.get('criterion', -1) == criterion_id:
                             performance_data['criterion'] = criterion.id
+
+                # update criterion id in preference intensities
+                for pref_intensity_data in pref_intensities_data:
+                    if pref_intensity_data.get('criterion', -1) == criterion_id:
+                        pref_intensity_data['criterion'] = criterion.id
 
         # Alternatives
         # if there are alternatives that were not in the payload, we delete them
@@ -254,10 +285,118 @@ class ProjectUpdate(APIView):
 
                     if performance_serializer.is_valid():
                         performance_serializer.save(alternative=alternative)
-                    else:
-                        print(f'{performance_serializer=}')
+
+                # update alternatives id in preference intensities
+                for pref_intensity_data in pref_intensities_data:
+                    for alternative_number in range(1, 5):
+                        if pref_intensity_data.get(f'alternative_{alternative_number}', -1) == alternative_id:
+                            pref_intensity_data[f'alternative_{alternative_number}'] = alternative.id
+
+        # Preference intensities
+        # if there are preference intensities that were not in the payload, we delete them
+        pref_intensities_ids_db = project.preference_intensities.values_list('id', flat=True)
+        pref_intensities_ids_request = [pref_intensity_data.get('id') for pref_intensity_data in pref_intensities_data]
+        pref_intensities_ids_to_delete = set(pref_intensities_ids_db) - set(pref_intensities_ids_request)
+        project.preference_intensities.filter(id__in=pref_intensities_ids_to_delete).delete()
+
+        # if there exists a preference_intensity with provided ID in the project, we update it
+        # if there does not exist a preference_intensity with provided ID in the project, we insert it (with a new id)
+        for pref_intensity_data in pref_intensities_data:
+            pref_intensity_id = pref_intensity_data.get('id')
+
+            try:
+                pref_intensity = project.preference_intensities.get(id=pref_intensity_id)
+                pref_intensity_serializer = PreferenceIntensitySerializer(pref_intensity, data=pref_intensity_data)
+            except PreferenceIntensity.DoesNotExist:
+                pref_intensity_serializer = PreferenceIntensitySerializer(data=pref_intensity_data)
+
+            if pref_intensity_serializer.is_valid():
+                pref_intensity_serializer.save(project=project)
 
         return Response({"message": "Data updated successfully"})
+
+
+class ProjectResults(APIView):
+    permission_classes = [IsOwnerOfProject]
+
+    def post(self, request, *args, **kwargs):
+        project_id = kwargs.get('project_pk')
+        project = Project.objects.filter(id=project_id).first()
+
+        # get gain
+        gain_list = Criterion.objects.filter(project=project).order_by('id').values_list('gain', flat=True)
+        gain_list = [1 if gain else 0 for gain in gain_list]
+
+        # get weights and normalize them
+        weights_list = Criterion.objects.filter(project=project).order_by('id').values_list('weight', flat=True)
+        weights_list = [weight / sum(weights_list) for weight in weights_list]
+
+        # get alternatives
+        alternatives = Alternative.objects.filter(project=project).order_by('id')
+        alternatives_id_list = [str(_id) for _id in
+                                Alternative.objects.filter(project=project).order_by('id').values_list('id', flat=True)]
+
+        # get performances
+        performances_table = []
+        for alternative in alternatives:
+            performances = Performance.objects \
+                .filter(alternative=alternative) \
+                .order_by('criterion_id') \
+                .values_list('value', flat=True)
+            performances_table.append(performances)
+
+        # get preferences and indifferences
+        # first, we get unique reference_ranking values and sort it
+        ref_ranking_unique_values = set(Alternative.objects
+                                        .filter(project=project)
+                                        .values_list('reference_ranking', flat=True)
+                                        )
+        ref_ranking_unique_list_sorted = sorted(ref_ranking_unique_values)
+
+        preferences_list = []
+        indifferences_list = []
+        # now we need to check every alternative and find other alternatives that are below this alternative in
+        # reference_ranking
+        for i_alternative_1, alternative_1 in enumerate(alternatives):
+
+            # 0 in reference_ranking means that it was not placed in the reference ranking
+            if alternative_1.reference_ranking == 0:
+                continue
+
+            ref_ranking_index = ref_ranking_unique_list_sorted.index(alternative_1.reference_ranking)
+            if ref_ranking_index < len(ref_ranking_unique_list_sorted) - 1:
+                for i_alternative_2, alternative_2 in enumerate(alternatives):
+
+                    if i_alternative_1 == i_alternative_2:
+                        continue
+
+                    if alternative_2.reference_ranking == ref_ranking_unique_list_sorted[ref_ranking_index + 1]:
+                        preferences_list.append([i_alternative_1, i_alternative_2])
+
+                    if alternative_2.reference_ranking == ref_ranking_unique_list_sorted[ref_ranking_index]:
+                        indifferences_list.append([i_alternative_1, i_alternative_2])
+
+        solver = Solver()
+
+        ranking = solver.get_ranking_dict(
+            performances_table,
+            alternatives_id_list,
+            preferences_list,
+            indifferences_list,
+            weights_list,
+            gain_list,
+        )
+
+        # updating alternatives with ranking values
+        for i, (key, value) in enumerate(sorted(ranking.items(), key=lambda x: -x[1]), start=1):
+            alternative = Alternative.objects.filter(id=int(key)).first()
+            alternative.ranking = i
+            alternative.save()
+
+        alternatives = Alternative.objects.filter(project=project)
+        serializer = AlternativeSerializer(alternatives, many=True)
+
+        return Response(serializer.data)
 
 
 # Criterion
@@ -366,6 +505,28 @@ class HasseGraphDetail(generics.RetrieveUpdateDestroyAPIView):
     queryset = HasseGraph.objects.all()
     serializer_class = HasseGraphSerializer
 
+
+# PreferenceIntensity
+class PreferenceIntensityList(generics.ListCreateAPIView):
+    permission_classes = [IsOwnerOfProject]
+    serializer_class = PreferenceIntensitySerializer
+
+    def get_queryset(self):
+        project_id = self.kwargs.get('project_pk')
+        preference_intensities = PreferenceIntensity.objects.filter(project=project_id)
+        return preference_intensities
+
+    def perform_create(self, serializer):
+        project_id = self.kwargs.get('project_pk')
+        project = Project.objects.filter(id=project_id).first()
+        serializer.save(project=project)
+
+
+class PreferenceIntensityDetail(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsOwnerOfPreferenceIntensity]
+    serializer_class = PreferenceIntensitySerializer
+    queryset = PreferenceIntensity.objects.all()
+    lookup_url_kwarg = 'preference_intensity_pk'
 
 # FileUpload
 @csrf_exempt
