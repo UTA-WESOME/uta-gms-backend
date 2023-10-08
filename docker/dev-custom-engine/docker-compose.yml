@@ -4,7 +4,7 @@ services:
     container_name: uta_gms_django_custom
     build:
       context: ../..
-      dockerfile: docker/dev/backend.dockerfile
+      dockerfile: docker/dev-custom-engine/backend.dockerfile
       args:
         LOCAL_ENGINE_WHL_FILE: ./engine/
     command: >
