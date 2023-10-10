@@ -34,7 +34,6 @@ urlpatterns = [
 
     path('projects/', ProjectList.as_view()),
     path('projects/<int:project_pk>', ProjectDetail.as_view()),
-    path('projects/<int:project_pk>/batch', ProjectUpdate.as_view()),
 
     path('projects/<int:project_pk>/criteria/', CriterionList.as_view()),
     path('criteria/<int:criterion_pk>', CriterionDetail.as_view()),
@@ -49,4 +48,6 @@ urlpatterns = [
     path('criteria_functions/', CriterionFunctionDetail.as_view()),
     path('hassegraphs/', HasseGraphList.as_view()),
     path('hassegraphs/', HasseGraphDetail.as_view()),
+
+    path('<int:project_pk>/upload/', parse_file),
 ]

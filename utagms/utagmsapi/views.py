@@ -528,22 +528,38 @@ class PreferenceIntensityDetail(generics.RetrieveUpdateDestroyAPIView):
     queryset = PreferenceIntensity.objects.all()
     lookup_url_kwarg = 'preference_intensity_pk'
 
+
 # FileUpload
 @csrf_exempt
-def parse_file(request):
+def parse_file(request, **kwargs):
     if request.method == 'POST' and request.FILES.get('file'):
         uploaded_file = request.FILES['file']
+        project_id = kwargs.get('project_pk')
+        project = Project.objects.filter(id=project_id).first()
 
+        # parse files
         parser = Parser()
         uploaded_file_text = _io.TextIOWrapper(uploaded_file, encoding='utf-8')
 
-        alternatives_id_list = parser.get_alternatives_id_list_csv(uploaded_file_text)
-        type_of_criterion = parser.get_criteria_csv(uploaded_file_text)
-        performance_table_list = parser.get_performance_table_list_csv(uploaded_file_text)
+        alternatives_data = parser.get_alternatives_id_list_csv(uploaded_file_text)
+        criteria_data = parser.get_criteria_csv(uploaded_file_text)
+        print(alternatives_data)
+        print(criteria_data)
 
-        print(alternatives_id_list)
-        print(type_of_criterion)
-        print(performance_table_list)
+        # deleting previous data
+        Alternative.objects.filter(project=project).delete()
+        Criterion.objects.filter(project=project).delete()
+
+        # inserting parsed data
+        for criterion_data in criteria_data:
+            criterion_serializer = CriterionSerializer(data=criterion_data)
+            if criterion_serializer.is_valid():
+                criterion_serializer.save(project=project)
+
+        for alternative_data in alternatives_data:
+            alternative_serializer = AlternativeSerializer(data=alternative_data)
+            if alternative_serializer.is_valid():
+                alternative_serializer.save(project=project)
 
         return JsonResponse({'message': 'File uploaded successfully'})
 
