@@ -275,7 +275,7 @@ class ProjectBatch(APIView):
 
                     try:
                         performance = alternative.performances.get(id=performance_id)
-                        performance_serializer = PerformanceSerializer(performance, data=performance_data)
+                        performance_serializer = PerformanceSerializerUpdate(performance, data=performance_data)
                     except Performance.DoesNotExist:
                         performance_serializer = PerformanceSerializer(data=performance_data)
 
@@ -452,24 +452,8 @@ class PerformanceList(generics.ListCreateAPIView):
         return performances
 
     def perform_create(self, serializer):
-
-        # get alternative
-        alternative_id = self.kwargs.get("alternative_pk")
+        alternative_id = self.kwargs.get('alternative_pk')
         alternative = Alternative.objects.filter(id=alternative_id).first()
-
-        # get criterion
-        criterion = serializer.validated_data.get('criterion')
-
-        # check if alternative and criterion are in the same project
-        if criterion.project != alternative.project:
-            raise ValidationError({"details": "alternative and criterion do not belong to the same project"})
-
-        # check if there exists a performance with this alternative and criterion
-        performance = Performance.objects.filter(alternative=alternative).filter(criterion=criterion).first()
-        if performance:
-            raise ValidationError({"details": "performance for this alternative and criterion already exists"})
-
-        # save the performance
         serializer.save(alternative=alternative)
 
 
