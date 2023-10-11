@@ -7,6 +7,7 @@ from rest_framework import generics
 from rest_framework.exceptions import AuthenticationFailed, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
+import utagmsengine.dataclasses as uged
 from utagmsengine.solver import Solver
 
 from utagmsapi.utils.jwt import get_user_from_jwt
@@ -319,27 +320,23 @@ class ProjectResults(APIView):
         project_id = kwargs.get('project_pk')
         project = Project.objects.filter(id=project_id).first()
 
-        # get gain
-        gain_list = Criterion.objects.filter(project=project).order_by('id').values_list('gain', flat=True)
-        gain_list = [1 if gain else 0 for gain in gain_list]
+        # get sum of the criteria weights
+        weights_sum = sum(Criterion.objects.filter(project=project).order_by('id').values_list('weight', flat=True))
 
-        # get weights and normalize them
-        weights_list = Criterion.objects.filter(project=project).order_by('id').values_list('weight', flat=True)
-        weights_list = [weight / sum(weights_list) for weight in weights_list]
+        # get criteria
+        criteria = [uged.Criterion(criterion_id=str(c.id), weight=c.weight / weights_sum, gain=c.gain)
+                    for c in Criterion.objects.filter(project=project)]
 
         # get alternatives
-        alternatives = Alternative.objects.filter(project=project).order_by('id')
-        alternatives_id_list = [str(_id) for _id in
-                                Alternative.objects.filter(project=project).order_by('id').values_list('id', flat=True)]
+        alternatives = Alternative.objects.filter(project=project)
 
-        # get performances
-        performances_table = []
+        # get performance_table_list
+        performances = {}
         for alternative in alternatives:
-            performances = Performance.objects \
-                .filter(alternative=alternative) \
-                .order_by('criterion_id') \
-                .values_list('value', flat=True)
-            performances_table.append(performances)
+            performances[str(alternative.id)] = {
+                str(criterion_id): value for criterion_id, value in
+                Performance.objects.filter(alternative=alternative).values_list('criterion', 'value')
+            }
 
         # get preferences and indifferences
         # first, we get unique reference_ranking values and sort it
@@ -353,34 +350,37 @@ class ProjectResults(APIView):
         indifferences_list = []
         # now we need to check every alternative and find other alternatives that are below this alternative in
         # reference_ranking
-        for i_alternative_1, alternative_1 in enumerate(alternatives):
+        for alternative_1 in alternatives:
 
             # 0 in reference_ranking means that it was not placed in the reference ranking
             if alternative_1.reference_ranking == 0:
                 continue
 
+            # we have to get the index of the current alternative's reference ranking
             ref_ranking_index = ref_ranking_unique_list_sorted.index(alternative_1.reference_ranking)
             if ref_ranking_index < len(ref_ranking_unique_list_sorted) - 1:
-                for i_alternative_2, alternative_2 in enumerate(alternatives):
+                for alternative_2 in alternatives:
 
-                    if i_alternative_1 == i_alternative_2:
+                    if alternative_1.id == alternative_2.id:
                         continue
 
                     if alternative_2.reference_ranking == ref_ranking_unique_list_sorted[ref_ranking_index + 1]:
-                        preferences_list.append([i_alternative_1, i_alternative_2])
+                        preferences_list.append(uged.Preference(
+                            superior=str(alternative_1.id), inferior=str(alternative_2.id)
+                        ))
 
                     if alternative_2.reference_ranking == ref_ranking_unique_list_sorted[ref_ranking_index]:
-                        indifferences_list.append([i_alternative_1, i_alternative_2])
+                        indifferences_list.append(uged.Indifference(
+                            equal1=str(alternative_1.id), equal2=str(alternative_2.id)
+                        ))
 
         solver = Solver()
 
         ranking = solver.get_ranking_dict(
-            performances_table,
-            alternatives_id_list,
+            performances,
             preferences_list,
             indifferences_list,
-            weights_list,
-            gain_list,
+            criteria,
         )
 
         # updating alternatives with ranking values
