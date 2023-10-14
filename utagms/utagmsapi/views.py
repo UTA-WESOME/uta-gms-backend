@@ -537,29 +537,60 @@ def parse_file(request, **kwargs):
         project_id = kwargs.get('project_pk')
         project = Project.objects.filter(id=project_id).first()
 
-        # parse files
         parser = Parser()
         uploaded_file_text = _io.TextIOWrapper(uploaded_file, encoding='utf-8')
 
-        alternatives_data = parser.get_alternatives_id_list_csv(uploaded_file_text)
-        criteria_data = parser.get_criteria_csv(uploaded_file_text)
-        print(alternatives_data)
-        print(criteria_data)
-
         # deleting previous data
-        Alternative.objects.filter(project=project).delete()
-        Criterion.objects.filter(project=project).delete()
+        curr_alternatives = Alternative.objects.filter(project=project)
+        curr_criteria = Criterion.objects.filter(project=project)
+        for alt in curr_alternatives:
+            Performance.objects.filter(alternative=alt).delete()
+        for crit in curr_criteria:
+            Performance.objects.filter(criterion=crit).delete()
+        curr_alternatives.delete()
+        curr_criteria.delete()
 
-        # inserting parsed data
-        for criterion_data in criteria_data:
+        # criteria
+        criterion_list = parser.get_criterion_list_csv(uploaded_file_text)
+        for criterion in criterion_list:
+            criterion_data = {
+                'name': criterion.criterion_id,
+                'gain': criterion.gain,
+                'linear_segments': 0,
+            }
+
             criterion_serializer = CriterionSerializer(data=criterion_data)
             if criterion_serializer.is_valid():
                 criterion_serializer.save(project=project)
 
-        for alternative_data in alternatives_data:
+        # alternatives
+        uploaded_file_text.seek(0)
+        performance_table_list = parser.get_performance_table_dict_csv(uploaded_file_text)
+        for alternative in performance_table_list.keys():
+            alternative_data = {
+                'name': alternative,
+                'ranking': 0,
+            }
+
             alternative_serializer = AlternativeSerializer(data=alternative_data)
             if alternative_serializer.is_valid():
                 alternative_serializer.save(project=project)
+
+        # performances
+        criteria = Criterion.objects.all()
+        alternatives = Alternative.objects.all()
+        for alternative_name, alternative_data in performance_table_list.items():
+            alternative = alternatives.get(name=alternative_name, project=project)
+            for criterion_name, value in alternative_data.items():
+                criterion = criteria.get(name=criterion_name, project=project)
+                performance_data = {
+                    'criterion': criterion.pk,
+                    'value': value,
+                    'ranking': 0,
+                }
+                performance_serializer = PerformanceSerializer(data=performance_data)
+                if performance_serializer.is_valid():
+                    performance_serializer.save(alternative=alternative)
 
         return JsonResponse({'message': 'File uploaded successfully'})
 
