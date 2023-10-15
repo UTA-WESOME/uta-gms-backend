@@ -21,6 +21,7 @@ class Project(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="projects")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    hasse_graph = models.JSONField(null=True, help_text="Graph that represents necessary relations between project's alternatives")
 
     class Meta:
         ordering = ("name", "user",)

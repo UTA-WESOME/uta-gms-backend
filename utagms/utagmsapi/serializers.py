@@ -1,9 +1,9 @@
 from django.contrib.auth.hashers import make_password
 from rest_framework import serializers
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import ValidationError, MethodNotAllowed
 
 from utagmsapi import models
-from utagmsapi.models import Performance
+from utagmsapi.models import Performance, Criterion, Alternative, PreferenceIntensity
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -27,22 +27,47 @@ class ProjectSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.Project
         exclude = ['user']
-        optional_fields = ['description']
-        # fields = "__all__"
+        optional_fields = ['description', 'hasse_graph']
+
+
+class ProjectSerializerWhole(serializers.ModelSerializer):
+    criteria = serializers.SerializerMethodField()
+    alternatives = serializers.SerializerMethodField()
+    preference_intensities = serializers.SerializerMethodField()
+
+    def get_criteria(self, obj):
+        criteria = Criterion.objects.filter(project=obj)
+        return CriterionSerializer(criteria, many=True).data
+
+    def get_alternatives(self, obj):
+        alternatives = Alternative.objects.filter(project=obj)
+        return AlternativeSerializerWithPerformances(alternatives, many=True).data
+
+    def get_preference_intensities(self, obj):
+        preference_intensities = PreferenceIntensity.objects.filter(project=obj)
+        return PreferenceIntensitySerializer(preference_intensities, many=True).data
+
+    class Meta:
+        model = models.Project
+        fields = '__all__'
+
+    def create(self, validated_data):
+        raise MethodNotAllowed("Create operation not allowed")
+
+    def update(self, instance, validated_data):
+        raise MethodNotAllowed("Update operation not allowed")
 
 
 class CriterionSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.Criterion
         exclude = ['project']
-        # fields = "__all__"
 
 
 class AlternativeSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.Alternative
         exclude = ['project']
-        # fields = "__all__"
 
 
 class AlternativeSerializerWithPerformances(serializers.ModelSerializer):
@@ -61,7 +86,6 @@ class PerformanceSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.Performance
         exclude = ['alternative']
-        # fields = "__all__"
 
     def save(self, **kwargs):
 

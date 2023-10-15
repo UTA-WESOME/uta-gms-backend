@@ -38,7 +38,7 @@ from .serializers import (
     HasseGraphSerializer,
     PerformanceSerializerUpdate,
     PreferenceIntensitySerializer,
-    AlternativeSerializerWithPerformances
+    ProjectSerializerWhole
 )
 
 
@@ -189,21 +189,9 @@ class ProjectBatch(APIView):
         project_id = kwargs.get('project_pk')
         project = Project.objects.filter(id=project_id).first()
 
-        # get data from db
-        criteria = Criterion.objects.filter(project=project)
-        alternatives = Alternative.objects.filter(project=project)
-        pref_intensities = PreferenceIntensity.objects.filter(project=project)
+        project_serializer = ProjectSerializerWhole(project)
 
-        # serialize data to json
-        criteria_serializer = CriterionSerializer(criteria, many=True)
-        alternatives_serializer = AlternativeSerializerWithPerformances(alternatives, many=True)
-        pref_serializer = PreferenceIntensitySerializer(pref_intensities, many=True)
-
-        return Response({
-            "criteria": criteria_serializer.data,
-            "alternatives": alternatives_serializer.data,
-            "preference_intensities": pref_serializer.data
-        })
+        return Response(project_serializer.data)
 
     def patch(self, request, *args, **kwargs):
         data = request.data
@@ -389,10 +377,22 @@ class ProjectResults(APIView):
             alternative.ranking = i
             alternative.save()
 
-        alternatives = Alternative.objects.filter(project=project)
-        serializer = AlternativeSerializer(alternatives, many=True)
+        hasse_graph = solver.get_hasse_diagram_dict(
+            performances_table,
+            alternatives_id_list,
+            preferences_list,
+            indifferences_list,
+            weights_list,
+            gain_list,
+        )
 
-        return Response(serializer.data)
+        # change data to integer ids and to list
+        hasse_graph = {int(key): [int(value) for value in values] for key, values in hasse_graph.items()}
+        project.hasse_graph = hasse_graph
+        project.save()
+
+        project_serializer = ProjectSerializerWhole(project)
+        return Response(project_serializer.data)
 
 
 # Criterion
