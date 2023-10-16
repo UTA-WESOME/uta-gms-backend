@@ -375,7 +375,6 @@ class ProjectResults(APIView):
                         ))
 
         solver = Solver()
-
         ranking = solver.get_ranking_dict(
             performances,
             preferences_list,
