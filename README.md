@@ -24,4 +24,4 @@ docker compose up --build
 
 ## Database Schema
 
-![database schema](./uta-gms-backend ER diagram.png)
+![database schema](./uta-gms-backend-ER-diagram.png)
