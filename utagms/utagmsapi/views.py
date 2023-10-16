@@ -186,12 +186,9 @@ class ProjectBatch(APIView):
     permission_classes = [IsOwnerOfProject]
 
     def get(self, request, *args, **kwargs):
-
         project_id = kwargs.get('project_pk')
         project = Project.objects.filter(id=project_id).first()
-
         project_serializer = ProjectSerializerWhole(project)
-
         return Response(project_serializer.data)
 
     def patch(self, request, *args, **kwargs):
@@ -298,7 +295,8 @@ class ProjectBatch(APIView):
             if pref_intensity_serializer.is_valid():
                 pref_intensity_serializer.save(project=project)
 
-        return Response({"message": "Data updated successfully"})
+        project_serializer = ProjectSerializerWhole(project)
+        return Response(project_serializer.data)
 
 
 class ProjectResults(APIView):
@@ -377,12 +375,10 @@ class ProjectResults(APIView):
             alternative.save()
 
         hasse_graph = solver.get_hasse_diagram_dict(
-            performances_table,
-            alternatives_id_list,
+            performances,
             preferences_list,
             indifferences_list,
-            weights_list,
-            gain_list,
+            criteria
         )
 
         # change data to integer ids and to list
