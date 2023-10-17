@@ -2,14 +2,15 @@ import datetime
 
 import jwt
 import _io
+from builtins import Exception
 from django.conf import settings
 from django.contrib.auth.hashers import check_password
-from django.views.decorators.csrf import csrf_exempt
+from django.db import transaction
 from rest_framework import generics
+from rest_framework import status
 from rest_framework.exceptions import AuthenticationFailed, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from django.http import JsonResponse
 from utagmsengine.solver import Solver
 from utagmsengine.parser import Parser
 
@@ -530,68 +531,75 @@ class PreferenceIntensityDetail(generics.RetrieveUpdateDestroyAPIView):
 
 
 # FileUpload
-@csrf_exempt
-def parse_file(request, **kwargs):
-    if request.method == 'POST' and request.FILES.get('file'):
-        uploaded_file = request.FILES['file']
-        project_id = kwargs.get('project_pk')
-        project = Project.objects.filter(id=project_id).first()
+class FileUpload(APIView):
+    permission_classes = [IsOwnerOfProject]
 
-        parser = Parser()
-        uploaded_file_text = _io.TextIOWrapper(uploaded_file, encoding='utf-8')
+    @transaction.atomic
+    def post(self, request, *args, **kwargs):
+        if request.FILES.get('file'):
+            uploaded_file = request.FILES['file']
+            uploaded_file_text = _io.TextIOWrapper(uploaded_file, encoding='utf-8')
+            project_id = kwargs.get('project_pk')
+            project = Project.objects.filter(id=project_id).first()
 
-        # deleting previous data
-        curr_alternatives = Alternative.objects.filter(project=project)
-        curr_criteria = Criterion.objects.filter(project=project)
-        for alt in curr_alternatives:
-            Performance.objects.filter(alternative=alt).delete()
-        for crit in curr_criteria:
-            Performance.objects.filter(criterion=crit).delete()
-        curr_alternatives.delete()
-        curr_criteria.delete()
+            # deleting previous data
+            curr_alternatives = Alternative.objects.filter(project=project)
+            curr_criteria = Criterion.objects.filter(project=project)
+            for alt in curr_alternatives:
+                Performance.objects.filter(alternative=alt).delete()
+            for crit in curr_criteria:
+                Performance.objects.filter(criterion=crit).delete()
+            curr_alternatives.delete()
+            curr_criteria.delete()
 
-        # criteria
-        criterion_list = parser.get_criterion_list_csv(uploaded_file_text)
-        for criterion in criterion_list:
-            criterion_data = {
-                'name': criterion.criterion_id,
-                'gain': criterion.gain,
-                'linear_segments': 0,
-            }
+            try:
+                parser = Parser()
+                criterion_list = parser.get_criterion_list_csv(uploaded_file_text)
+                uploaded_file_text.seek(0)
+                performance_table_list = parser.get_performance_table_dict_csv(uploaded_file_text)
+            except Exception as e:
+                return Response({'message': 'Incorrect file: {}'.format(str(e))},
+                                status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
-            criterion_serializer = CriterionSerializer(data=criterion_data)
-            if criterion_serializer.is_valid():
-                criterion_serializer.save(project=project)
+            # criteria
+            for criterion in criterion_list:
+                criterion_data = {
+                    'name': criterion.criterion_id,
+                    'gain': criterion.gain,
+                    'linear_segments': 0,
+                }
 
-        # alternatives
-        uploaded_file_text.seek(0)
-        performance_table_list = parser.get_performance_table_dict_csv(uploaded_file_text)
-        for alternative in performance_table_list.keys():
-            alternative_data = {
-                'name': alternative,
-                'ranking': 0,
-            }
+                criterion_serializer = CriterionSerializer(data=criterion_data)
+                if criterion_serializer.is_valid():
+                    criterion_serializer.save(project=project)
 
-            alternative_serializer = AlternativeSerializer(data=alternative_data)
-            if alternative_serializer.is_valid():
-                alternative_serializer.save(project=project)
-
-        # performances
-        criteria = Criterion.objects.all()
-        alternatives = Alternative.objects.all()
-        for alternative_name, alternative_data in performance_table_list.items():
-            alternative = alternatives.get(name=alternative_name, project=project)
-            for criterion_name, value in alternative_data.items():
-                criterion = criteria.get(name=criterion_name, project=project)
-                performance_data = {
-                    'criterion': criterion.pk,
-                    'value': value,
+            # alternatives
+            for alternative in performance_table_list.keys():
+                alternative_data = {
+                    'name': alternative,
                     'ranking': 0,
                 }
-                performance_serializer = PerformanceSerializer(data=performance_data)
-                if performance_serializer.is_valid():
-                    performance_serializer.save(alternative=alternative)
 
-        return JsonResponse({'message': 'File uploaded successfully'})
+                alternative_serializer = AlternativeSerializer(data=alternative_data)
+                if alternative_serializer.is_valid():
+                    alternative_serializer.save(project=project)
 
-    return JsonResponse({'message': 'No file selected or invalid request'}, status=400)
+            # performances
+            criteria = Criterion.objects.all()
+            alternatives = Alternative.objects.all()
+            for alternative_name, alternative_data in performance_table_list.items():
+                alternative = alternatives.get(name=alternative_name, project=project)
+                for criterion_name, value in alternative_data.items():
+                    criterion = criteria.get(name=criterion_name, project=project)
+                    performance_data = {
+                        'criterion': criterion.pk,
+                        'value': value,
+                        'ranking': 0,
+                    }
+                    performance_serializer = PerformanceSerializer(data=performance_data)
+                    if performance_serializer.is_valid():
+                        performance_serializer.save(alternative=alternative)
+
+            return Response({'message': 'File uploaded successfully'})
+
+        return Response({'message': 'No file selected or invalid request'}, status=status.HTTP_400_BAD_REQUEST)

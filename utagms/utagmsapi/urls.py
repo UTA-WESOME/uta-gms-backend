@@ -22,7 +22,7 @@ from .views import (
     ProjectResults,
     PreferenceIntensityList,
     PreferenceIntensityDetail,
-    parse_file
+    FileUpload
 )
 
 urlpatterns = [
@@ -52,7 +52,7 @@ urlpatterns = [
     path('hassegraphs/', HasseGraphDetail.as_view()),
 
     path('projects/<int:project_pk>/preference_intensities/', PreferenceIntensityList.as_view()),
-    path('preference_intensities/<int:preference_intensity_pk>', PreferenceIntensityDetail.as_view())
+    path('preference_intensities/<int:preference_intensity_pk>', PreferenceIntensityDetail.as_view()),
 
-    path('<int:project_pk>/upload/', parse_file),
+    path('projects/<int:project_pk>/upload/', FileUpload.as_view()),
 ]
