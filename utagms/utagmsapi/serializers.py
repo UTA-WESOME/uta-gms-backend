@@ -167,3 +167,17 @@ class PairwiseComparisonSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.PairwiseComparison
         exclude = ['project']
+
+    def save(self, **kwargs):
+        # checking if alternatives belong to the same project
+        project = kwargs.get('project')
+        if project:
+            alternative_1 = self.validated_data.get('alternative_1')
+            alternative_2 = self.validated_data.get('alternative_2')
+            if alternative_1.project != alternative_2.project or alternative_1.project != project:
+                raise ValidationError(
+                    {
+                        "details": "The alternatives must belong to the same project as pairwise comparison."
+                    }
+                )
+        super().save(**kwargs)
