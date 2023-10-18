@@ -362,40 +362,54 @@ class ProjectResults(APIView):
             }
 
         # get preferences and indifferences
-        # first, we get unique reference_ranking values and sort it
-        ref_ranking_unique_values = set(Alternative.objects
-                                        .filter(project=project)
-                                        .values_list('reference_ranking', flat=True)
-                                        )
-        ref_ranking_unique_list_sorted = sorted(ref_ranking_unique_values)
-
         preferences_list = []
         indifferences_list = []
-        # now we need to check every alternative and find other alternatives that are below this alternative in
-        # reference_ranking
-        for alternative_1 in alternatives:
+        # we need to check if the project uses reference ranking or pairwise comparisons
+        if project.pairwise_mode:
+            for pairwise_comparison in PairwiseComparison.objects.filter(project=project):
+                if pairwise_comparison.type == PairwiseComparison.PREFERENCE:
+                    preferences_list.append(uged.Preference(
+                        superior=str(pairwise_comparison.alternative_1.id),
+                        inferior=str(pairwise_comparison.alternative_2.id)
+                    ))
+                if pairwise_comparison.type == PairwiseComparison.INDIFFERENCE:
+                    indifferences_list.append(uged.Indifference(
+                        equal1=str(pairwise_comparison.alternative_1.id),
+                        equal2=str(pairwise_comparison.alternative_2.id)
+                    ))
+        else:
+            # first, we get unique reference_ranking values and sort it
+            ref_ranking_unique_values = set(
+                Alternative.objects
+                .filter(project=project)
+                .values_list('reference_ranking', flat=True)
+            )
+            ref_ranking_unique_list_sorted = sorted(ref_ranking_unique_values)
+            # now we need to check every alternative and find other alternatives that are below this alternative in
+            # reference_ranking
+            for alternative_1 in alternatives:
 
-            # 0 in reference_ranking means that it was not placed in the reference ranking
-            if alternative_1.reference_ranking == 0:
-                continue
+                # 0 in reference_ranking means that it was not placed in the reference ranking
+                if alternative_1.reference_ranking == 0:
+                    continue
 
-            # we have to get the index of the current alternative's reference ranking
-            ref_ranking_index = ref_ranking_unique_list_sorted.index(alternative_1.reference_ranking)
-            if ref_ranking_index < len(ref_ranking_unique_list_sorted) - 1:
-                for alternative_2 in alternatives:
+                # we have to get the index of the current alternative's reference ranking
+                ref_ranking_index = ref_ranking_unique_list_sorted.index(alternative_1.reference_ranking)
+                if ref_ranking_index < len(ref_ranking_unique_list_sorted) - 1:
+                    for alternative_2 in alternatives:
 
-                    if alternative_1.id == alternative_2.id:
-                        continue
+                        if alternative_1.id == alternative_2.id:
+                            continue
 
-                    if alternative_2.reference_ranking == ref_ranking_unique_list_sorted[ref_ranking_index + 1]:
-                        preferences_list.append(uged.Preference(
-                            superior=str(alternative_1.id), inferior=str(alternative_2.id)
-                        ))
+                        if alternative_2.reference_ranking == ref_ranking_unique_list_sorted[ref_ranking_index + 1]:
+                            preferences_list.append(uged.Preference(
+                                superior=str(alternative_1.id), inferior=str(alternative_2.id)
+                            ))
 
-                    if alternative_2.reference_ranking == ref_ranking_unique_list_sorted[ref_ranking_index]:
-                        indifferences_list.append(uged.Indifference(
-                            equal1=str(alternative_1.id), equal2=str(alternative_2.id)
-                        ))
+                        if alternative_2.reference_ranking == ref_ranking_unique_list_sorted[ref_ranking_index]:
+                            indifferences_list.append(uged.Indifference(
+                                equal1=str(alternative_1.id), equal2=str(alternative_2.id)
+                            ))
 
         solver = Solver()
         ranking = solver.get_ranking_dict(
@@ -560,7 +574,7 @@ class PairwiseComparisonDetail(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsOwnerOfPairwiseComparison]
     serializer_class = PairwiseComparisonSerializer
     queryset = PairwiseComparison.objects.all()
-    lookup_url_kwarg = 'pairwise_comparison'
+    lookup_url_kwarg = 'pairwise_comparison_pk'
 
 
 # FileUpload
