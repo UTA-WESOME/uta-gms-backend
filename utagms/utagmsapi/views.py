@@ -204,9 +204,16 @@ class ProjectBatch(APIView):
         project_id = kwargs.get("project_pk")
         project = Project.objects.filter(id=project_id).first()
 
+        # set project's comparisons mode
+        pairwise_mode_data = data.get("pairwise_mode", False)
+        project.pairwise_mode = pairwise_mode_data
+        project.save()
+
+        # get data from request
         criteria_data = data.get("criteria", [])
         alternatives_data = data.get("alternatives", [])
         pref_intensities_data = data.get("preference_intensities", [])
+        pairwise_comparisons_data = data.get("pairwise_comparisons", [])
 
         # Criteria
         # if there are criteria that were not in the payload, we delete them
@@ -302,6 +309,28 @@ class ProjectBatch(APIView):
 
             if pref_intensity_serializer.is_valid():
                 pref_intensity_serializer.save(project=project)
+
+        # Pairwise Comparisons
+        # if there are pairwise comparisons that were not in the payload, we delete them
+        pairwise_comparisons_ids_db = project.pairwise_comparisons.values_list('id', flat=True)
+        pairwise_comparisons_ids_request = [pc_data.get('id') for pc_data in pairwise_comparisons_data]
+        pairwise_comparisons_idb_to_delete = set(pairwise_comparisons_ids_db) - set(pairwise_comparisons_ids_request)
+        project.pairwise_comparisons.filter(id__in=pairwise_comparisons_idb_to_delete).delete()
+
+        # if there exists a pairwise_comparison with provided ID in the project, we update it
+        # if there does not exist a pairwise_comparison with provided ID in the project, we insert it (with a new id)
+        for pairwise_comparison_data in pairwise_comparisons_data:
+            pairwise_comparison_id = pairwise_comparison_data
+
+            try:
+                pairwise_comparison = project.pairwise_comparisons.get(id=pairwise_comparison_id)
+                pairwise_comparison_serializer = PairwiseComparisonSerializer(pairwise_comparison,
+                                                                              data=pairwise_comparison_data)
+            except PairwiseComparison.DoesNotExist:
+                pairwise_comparison_serializer = PairwiseComparisonSerializer(data=pairwise_comparison_data)
+
+            if pairwise_comparison_serializer.is_valid():
+                pairwise_comparison_serializer.save(project=project)
 
         project_serializer = ProjectSerializerWhole(project)
         return Response(project_serializer.data)
