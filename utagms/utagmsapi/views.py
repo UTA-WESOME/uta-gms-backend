@@ -545,10 +545,6 @@ class FileUpload(APIView):
             # deleting previous data
             curr_alternatives = Alternative.objects.filter(project=project)
             curr_criteria = Criterion.objects.filter(project=project)
-            for alt in curr_alternatives:
-                Performance.objects.filter(alternative=alt).delete()
-            for crit in curr_criteria:
-                Performance.objects.filter(criterion=crit).delete()
             curr_alternatives.delete()
             curr_criteria.delete()
 
@@ -577,6 +573,7 @@ class FileUpload(APIView):
             for alternative in performance_table_list.keys():
                 alternative_data = {
                     'name': alternative,
+                    'reference_ranking': 0,
                     'ranking': 0,
                 }
 
@@ -585,12 +582,12 @@ class FileUpload(APIView):
                     alternative_serializer.save(project=project)
 
             # performances
-            criteria = Criterion.objects.all()
-            alternatives = Alternative.objects.all()
+            criteria = Criterion.objects.all().filter(project=project)
+            alternatives = Alternative.objects.all().filter(project=project)
             for alternative_name, alternative_data in performance_table_list.items():
-                alternative = alternatives.get(name=alternative_name, project=project)
+                alternative = alternatives.get(name=alternative_name)
                 for criterion_name, value in alternative_data.items():
-                    criterion = criteria.get(name=criterion_name, project=project)
+                    criterion = criteria.get(name=criterion_name)
                     performance_data = {
                         'criterion': criterion.pk,
                         'value': value,
