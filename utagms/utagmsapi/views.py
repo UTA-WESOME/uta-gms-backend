@@ -1,14 +1,19 @@
 import datetime
 
 import jwt
+import _io
+from builtins import Exception
 from django.conf import settings
 from django.contrib.auth.hashers import check_password
+from django.db import transaction
 from rest_framework import generics
+from rest_framework import status
 from rest_framework.exceptions import AuthenticationFailed, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 import utagmsengine.dataclasses as uged
 from utagmsengine.solver import Solver
+from utagmsengine.parser import Parser
 
 from utagmsapi.utils.jwt import get_user_from_jwt
 from .models import (
@@ -502,3 +507,75 @@ class PreferenceIntensityDetail(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = PreferenceIntensitySerializer
     queryset = PreferenceIntensity.objects.all()
     lookup_url_kwarg = 'preference_intensity_pk'
+
+
+# FileUpload
+class FileUpload(APIView):
+    permission_classes = [IsOwnerOfProject]
+
+    @transaction.atomic
+    def post(self, request, *args, **kwargs):
+        if request.FILES.get('file'):
+            uploaded_file = request.FILES['file']
+            uploaded_file_text = _io.TextIOWrapper(uploaded_file, encoding='utf-8')
+            project_id = kwargs.get('project_pk')
+            project = Project.objects.filter(id=project_id).first()
+
+            # deleting previous data
+            curr_alternatives = Alternative.objects.filter(project=project)
+            curr_criteria = Criterion.objects.filter(project=project)
+            curr_alternatives.delete()
+            curr_criteria.delete()
+
+            try:
+                parser = Parser()
+                criterion_list = parser.get_criterion_list_csv(uploaded_file_text)
+                uploaded_file_text.seek(0)
+                performance_table_list = parser.get_performance_table_dict_csv(uploaded_file_text)
+            except Exception as e:
+                return Response({'message': 'Incorrect file: {}'.format(str(e))},
+                                status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+            # criteria
+            for criterion in criterion_list:
+                criterion_data = {
+                    'name': criterion.criterion_id,
+                    'gain': criterion.gain,
+                    'linear_segments': 0,
+                }
+
+                criterion_serializer = CriterionSerializer(data=criterion_data)
+                if criterion_serializer.is_valid():
+                    criterion_serializer.save(project=project)
+
+            # alternatives
+            for alternative in performance_table_list.keys():
+                alternative_data = {
+                    'name': alternative,
+                    'reference_ranking': 0,
+                    'ranking': 0,
+                }
+
+                alternative_serializer = AlternativeSerializer(data=alternative_data)
+                if alternative_serializer.is_valid():
+                    alternative_serializer.save(project=project)
+
+            # performances
+            criteria = Criterion.objects.all().filter(project=project)
+            alternatives = Alternative.objects.all().filter(project=project)
+            for alternative_name, alternative_data in performance_table_list.items():
+                alternative = alternatives.get(name=alternative_name)
+                for criterion_name, value in alternative_data.items():
+                    criterion = criteria.get(name=criterion_name)
+                    performance_data = {
+                        'criterion': criterion.pk,
+                        'value': value,
+                        'ranking': 0,
+                    }
+                    performance_serializer = PerformanceSerializer(data=performance_data)
+                    if performance_serializer.is_valid():
+                        performance_serializer.save(alternative=alternative)
+
+            return Response({'message': 'File uploaded successfully'})
+
+        return Response({'message': 'No file selected or invalid request'}, status=status.HTTP_400_BAD_REQUEST)
