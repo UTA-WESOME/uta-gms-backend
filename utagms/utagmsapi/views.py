@@ -1,8 +1,9 @@
+import _io
 import datetime
+from builtins import Exception
 
 import jwt
-import _io
-from builtins import Exception
+import utagmsengine.dataclasses as uged
 from django.conf import settings
 from django.contrib.auth.hashers import check_password
 from django.db import transaction
@@ -11,9 +12,8 @@ from rest_framework import status
 from rest_framework.exceptions import AuthenticationFailed, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
-import utagmsengine.dataclasses as uged
-from utagmsengine.solver import Solver
 from utagmsengine.parser import Parser
+from utagmsengine.solver import Solver
 
 from utagmsapi.utils.jwt import get_user_from_jwt
 from .models import (
@@ -24,7 +24,8 @@ from .models import (
     Performance,
     CriterionFunction,
     HasseGraph,
-    PreferenceIntensity
+    PreferenceIntensity,
+    PairwiseComparison
 )
 from .permissions import (
     IsOwnerOfProject,
@@ -32,7 +33,8 @@ from .permissions import (
     IsOwnerOfCriterion,
     IsOwnerOfAlternative,
     IsOwnerOfPerformance,
-    IsOwnerOfPreferenceIntensity
+    IsOwnerOfPreferenceIntensity,
+    IsOwnerOfPairwiseComparison
 )
 from .serializers import (
     UserSerializer,
@@ -44,7 +46,8 @@ from .serializers import (
     HasseGraphSerializer,
     PerformanceSerializerUpdate,
     PreferenceIntensitySerializer,
-    ProjectSerializerWhole
+    ProjectSerializerWhole,
+    PairwiseComparisonSerializer
 )
 
 
@@ -507,6 +510,28 @@ class PreferenceIntensityDetail(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = PreferenceIntensitySerializer
     queryset = PreferenceIntensity.objects.all()
     lookup_url_kwarg = 'preference_intensity_pk'
+
+
+class PairwiseComparisonList(generics.ListCreateAPIView):
+    permission_classes = [IsOwnerOfProject]
+    serializer_class = PairwiseComparisonSerializer
+
+    def get_queryset(self):
+        project_id = self.kwargs.get('project_pk')
+        pairwise_comparisons = PairwiseComparison.objects.filter(project=project_id)
+        return pairwise_comparisons
+
+    def perform_create(self, serializer):
+        project_id = self.kwargs.get('project_pk')
+        project = Project.objects.filter(id=project_id).first()
+        serializer.save(project=project)
+
+
+class PairwiseComparisonDetail(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsOwnerOfPairwiseComparison]
+    serializer_class = PairwiseComparisonSerializer
+    queryset = PairwiseComparison.objects.all()
+    lookup_url_kwarg = 'pairwise_comparison'
 
 
 # FileUpload
