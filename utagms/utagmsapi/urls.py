@@ -21,7 +21,8 @@ from .views import (
     ProjectBatch,
     ProjectResults,
     PreferenceIntensityList,
-    PreferenceIntensityDetail
+    PreferenceIntensityDetail,
+    FileUpload
 )
 
 urlpatterns = [
@@ -51,5 +52,7 @@ urlpatterns = [
     path('hassegraphs/', HasseGraphDetail.as_view()),
 
     path('projects/<int:project_pk>/preference_intensities/', PreferenceIntensityList.as_view()),
-    path('preference_intensities/<int:preference_intensity_pk>', PreferenceIntensityDetail.as_view())
+    path('preference_intensities/<int:preference_intensity_pk>', PreferenceIntensityDetail.as_view()),
+
+    path('projects/<int:project_pk>/upload/', FileUpload.as_view()),
 ]
