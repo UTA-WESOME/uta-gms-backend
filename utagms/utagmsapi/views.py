@@ -320,7 +320,7 @@ class ProjectBatch(APIView):
         # if there exists a pairwise_comparison with provided ID in the project, we update it
         # if there does not exist a pairwise_comparison with provided ID in the project, we insert it (with a new id)
         for pairwise_comparison_data in pairwise_comparisons_data:
-            pairwise_comparison_id = pairwise_comparison_data
+            pairwise_comparison_id = pairwise_comparison_data.get('id')
 
             try:
                 pairwise_comparison = project.pairwise_comparisons.get(id=pairwise_comparison_id)
