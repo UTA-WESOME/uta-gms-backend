@@ -21,7 +21,10 @@ class Project(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="projects")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    hasse_graph = models.JSONField(null=True, help_text="Graph that represents necessary relations between project's alternatives")
+    hasse_graph = models.JSONField(null=True, help_text="Graph that represents necessary relations between project's "
+                                                        "alternatives")
+    pairwise_mode = models.BooleanField(default=False, help_text="Set to 'True' if Pairwise Comparisons will be used, "
+                                                                 "or 'False' if Reference Ranking is preferred.")
 
     class Meta:
         ordering = ("name", "user",)
@@ -102,3 +105,20 @@ class PreferenceIntensity(models.Model):
 
     class Meta:
         ordering = ('project', 'criterion',)
+
+
+class PairwiseComparison(models.Model):
+    PREFERENCE = 'preference'
+    INDIFFERENCE = 'indifference'
+
+    TYPE_CHOICES = [
+        (PREFERENCE, 'Preference'),
+        (INDIFFERENCE, 'Indifference'),
+    ]
+
+    type = models.CharField(max_length=12, choices=TYPE_CHOICES)
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="pairwise_comparisons")
+    alternative_1 = models.ForeignKey(Alternative, on_delete=models.CASCADE, related_name="pairwise_comparisons_1")
+    alternative_2 = models.ForeignKey(Alternative, on_delete=models.CASCADE, related_name="pairwise_comparisons_2")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)

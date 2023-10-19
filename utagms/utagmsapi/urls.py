@@ -22,7 +22,7 @@ from .views import (
     ProjectResults,
     PreferenceIntensityList,
     PreferenceIntensityDetail,
-    FileUpload
+    FileUpload, PairwiseComparisonList, PairwiseComparisonDetail
 )
 
 urlpatterns = [
@@ -53,6 +53,9 @@ urlpatterns = [
 
     path('projects/<int:project_pk>/preference_intensities/', PreferenceIntensityList.as_view()),
     path('preference_intensities/<int:preference_intensity_pk>', PreferenceIntensityDetail.as_view()),
+
+    path('projects/<int:project_pk>/pairwise_comparisons/', PairwiseComparisonList.as_view()),
+    path('pairwise_comparisons/<int:pairwise_comparison_pk>', PairwiseComparisonDetail.as_view()),
 
     path('projects/<int:project_pk>/upload/', FileUpload.as_view()),
 ]

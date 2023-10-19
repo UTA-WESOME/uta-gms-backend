@@ -3,7 +3,7 @@ from rest_framework import serializers
 from rest_framework.exceptions import ValidationError, MethodNotAllowed
 
 from utagmsapi import models
-from utagmsapi.models import Performance, Criterion, Alternative, PreferenceIntensity
+from utagmsapi.models import Performance, Criterion, Alternative, PreferenceIntensity, PairwiseComparison
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -34,6 +34,7 @@ class ProjectSerializerWhole(serializers.ModelSerializer):
     criteria = serializers.SerializerMethodField()
     alternatives = serializers.SerializerMethodField()
     preference_intensities = serializers.SerializerMethodField()
+    pairwise_comparisons = serializers.SerializerMethodField()
 
     def get_criteria(self, obj):
         criteria = Criterion.objects.filter(project=obj)
@@ -46,6 +47,10 @@ class ProjectSerializerWhole(serializers.ModelSerializer):
     def get_preference_intensities(self, obj):
         preference_intensities = PreferenceIntensity.objects.filter(project=obj)
         return PreferenceIntensitySerializer(preference_intensities, many=True).data
+
+    def get_pairwise_comparisons(self, obj):
+        pairwise_comparisons = PairwiseComparison.objects.filter(project=obj)
+        return PairwiseComparisonSerializer(pairwise_comparisons, many=True).data
 
     class Meta:
         model = models.Project
@@ -155,4 +160,24 @@ class PreferenceIntensitySerializer(serializers.ModelSerializer):
                     }
                 )
 
+        super().save(**kwargs)
+
+
+class PairwiseComparisonSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.PairwiseComparison
+        exclude = ['project']
+
+    def save(self, **kwargs):
+        # checking if alternatives belong to the same project
+        project = kwargs.get('project')
+        if project:
+            alternative_1 = self.validated_data.get('alternative_1')
+            alternative_2 = self.validated_data.get('alternative_2')
+            if alternative_1.project != alternative_2.project or alternative_1.project != project:
+                raise ValidationError(
+                    {
+                        "details": "The alternatives must belong to the same project as pairwise comparison."
+                    }
+                )
         super().save(**kwargs)

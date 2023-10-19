@@ -1,7 +1,7 @@
 import jwt
 from rest_framework import permissions
 
-from utagmsapi.models import Project, Criterion, Alternative, Performance, PreferenceIntensity
+from utagmsapi.models import Project, Criterion, Alternative, Performance, PreferenceIntensity, PairwiseComparison
 from utagmsapi.utils.jwt import get_user_from_jwt
 
 
@@ -136,3 +136,24 @@ class IsOwnerOfPreferenceIntensity(permissions.BasePermission):
         preference_intensity = PreferenceIntensity.objects.filter(id=preference_intensity_pk).first()
 
         return preference_intensity.project.user == user
+
+
+class IsOwnerOfPairwiseComparison(permissions.BasePermission):
+
+    def has_permission(self, request, view):
+        # get user
+        token = request.COOKIES.get('access_token')
+        if token is None:
+            return False
+        try:
+            user = get_user_from_jwt(token)
+        except (jwt.ExpiredSignatureError, jwt.InvalidSignatureError):
+            return False
+
+        # get pairwise comparison
+        pairwise_comparison_pk = view.kwargs.get('pairwise_comparison_pk')
+        if pairwise_comparison_pk is None:
+            return False
+        pairwise_comparison = PairwiseComparison.objects.filter(id=pairwise_comparison_pk).first()
+
+        return pairwise_comparison.project.user == user

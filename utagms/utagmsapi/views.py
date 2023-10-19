@@ -1,8 +1,9 @@
+import _io
 import datetime
+from builtins import Exception
 
 import jwt
-import _io
-from builtins import Exception
+import utagmsengine.dataclasses as uged
 from django.conf import settings
 from django.contrib.auth.hashers import check_password
 from django.db import transaction
@@ -11,9 +12,8 @@ from rest_framework import status
 from rest_framework.exceptions import AuthenticationFailed, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
-import utagmsengine.dataclasses as uged
-from utagmsengine.solver import Solver
 from utagmsengine.parser import Parser
+from utagmsengine.solver import Solver
 
 from utagmsapi.utils.jwt import get_user_from_jwt
 from .models import (
@@ -24,7 +24,8 @@ from .models import (
     Performance,
     CriterionFunction,
     HasseGraph,
-    PreferenceIntensity
+    PreferenceIntensity,
+    PairwiseComparison
 )
 from .permissions import (
     IsOwnerOfProject,
@@ -32,7 +33,8 @@ from .permissions import (
     IsOwnerOfCriterion,
     IsOwnerOfAlternative,
     IsOwnerOfPerformance,
-    IsOwnerOfPreferenceIntensity
+    IsOwnerOfPreferenceIntensity,
+    IsOwnerOfPairwiseComparison
 )
 from .serializers import (
     UserSerializer,
@@ -44,7 +46,8 @@ from .serializers import (
     HasseGraphSerializer,
     PerformanceSerializerUpdate,
     PreferenceIntensitySerializer,
-    ProjectSerializerWhole
+    ProjectSerializerWhole,
+    PairwiseComparisonSerializer
 )
 
 
@@ -201,9 +204,16 @@ class ProjectBatch(APIView):
         project_id = kwargs.get("project_pk")
         project = Project.objects.filter(id=project_id).first()
 
+        # set project's comparisons mode
+        pairwise_mode_data = data.get("pairwise_mode", False)
+        project.pairwise_mode = pairwise_mode_data
+        project.save()
+
+        # get data from request
         criteria_data = data.get("criteria", [])
         alternatives_data = data.get("alternatives", [])
         pref_intensities_data = data.get("preference_intensities", [])
+        pairwise_comparisons_data = data.get("pairwise_comparisons", [])
 
         # Criteria
         # if there are criteria that were not in the payload, we delete them
@@ -300,6 +310,28 @@ class ProjectBatch(APIView):
             if pref_intensity_serializer.is_valid():
                 pref_intensity_serializer.save(project=project)
 
+        # Pairwise Comparisons
+        # if there are pairwise comparisons that were not in the payload, we delete them
+        pairwise_comparisons_ids_db = project.pairwise_comparisons.values_list('id', flat=True)
+        pairwise_comparisons_ids_request = [pc_data.get('id') for pc_data in pairwise_comparisons_data]
+        pairwise_comparisons_idb_to_delete = set(pairwise_comparisons_ids_db) - set(pairwise_comparisons_ids_request)
+        project.pairwise_comparisons.filter(id__in=pairwise_comparisons_idb_to_delete).delete()
+
+        # if there exists a pairwise_comparison with provided ID in the project, we update it
+        # if there does not exist a pairwise_comparison with provided ID in the project, we insert it (with a new id)
+        for pairwise_comparison_data in pairwise_comparisons_data:
+            pairwise_comparison_id = pairwise_comparison_data.get('id')
+
+            try:
+                pairwise_comparison = project.pairwise_comparisons.get(id=pairwise_comparison_id)
+                pairwise_comparison_serializer = PairwiseComparisonSerializer(pairwise_comparison,
+                                                                              data=pairwise_comparison_data)
+            except PairwiseComparison.DoesNotExist:
+                pairwise_comparison_serializer = PairwiseComparisonSerializer(data=pairwise_comparison_data)
+
+            if pairwise_comparison_serializer.is_valid():
+                pairwise_comparison_serializer.save(project=project)
+
         project_serializer = ProjectSerializerWhole(project)
         return Response(project_serializer.data)
 
@@ -330,40 +362,54 @@ class ProjectResults(APIView):
             }
 
         # get preferences and indifferences
-        # first, we get unique reference_ranking values and sort it
-        ref_ranking_unique_values = set(Alternative.objects
-                                        .filter(project=project)
-                                        .values_list('reference_ranking', flat=True)
-                                        )
-        ref_ranking_unique_list_sorted = sorted(ref_ranking_unique_values)
-
         preferences_list = []
         indifferences_list = []
-        # now we need to check every alternative and find other alternatives that are below this alternative in
-        # reference_ranking
-        for alternative_1 in alternatives:
+        # we need to check if the project uses reference ranking or pairwise comparisons
+        if project.pairwise_mode:
+            for pairwise_comparison in PairwiseComparison.objects.filter(project=project):
+                if pairwise_comparison.type == PairwiseComparison.PREFERENCE:
+                    preferences_list.append(uged.Preference(
+                        superior=str(pairwise_comparison.alternative_1.id),
+                        inferior=str(pairwise_comparison.alternative_2.id)
+                    ))
+                if pairwise_comparison.type == PairwiseComparison.INDIFFERENCE:
+                    indifferences_list.append(uged.Indifference(
+                        equal1=str(pairwise_comparison.alternative_1.id),
+                        equal2=str(pairwise_comparison.alternative_2.id)
+                    ))
+        else:
+            # first, we get unique reference_ranking values and sort it
+            ref_ranking_unique_values = set(
+                Alternative.objects
+                .filter(project=project)
+                .values_list('reference_ranking', flat=True)
+            )
+            ref_ranking_unique_list_sorted = sorted(ref_ranking_unique_values)
+            # now we need to check every alternative and find other alternatives that are below this alternative in
+            # reference_ranking
+            for alternative_1 in alternatives:
 
-            # 0 in reference_ranking means that it was not placed in the reference ranking
-            if alternative_1.reference_ranking == 0:
-                continue
+                # 0 in reference_ranking means that it was not placed in the reference ranking
+                if alternative_1.reference_ranking == 0:
+                    continue
 
-            # we have to get the index of the current alternative's reference ranking
-            ref_ranking_index = ref_ranking_unique_list_sorted.index(alternative_1.reference_ranking)
-            if ref_ranking_index < len(ref_ranking_unique_list_sorted) - 1:
-                for alternative_2 in alternatives:
+                # we have to get the index of the current alternative's reference ranking
+                ref_ranking_index = ref_ranking_unique_list_sorted.index(alternative_1.reference_ranking)
+                if ref_ranking_index < len(ref_ranking_unique_list_sorted) - 1:
+                    for alternative_2 in alternatives:
 
-                    if alternative_1.id == alternative_2.id:
-                        continue
+                        if alternative_1.id == alternative_2.id:
+                            continue
 
-                    if alternative_2.reference_ranking == ref_ranking_unique_list_sorted[ref_ranking_index + 1]:
-                        preferences_list.append(uged.Preference(
-                            superior=str(alternative_1.id), inferior=str(alternative_2.id)
-                        ))
+                        if alternative_2.reference_ranking == ref_ranking_unique_list_sorted[ref_ranking_index + 1]:
+                            preferences_list.append(uged.Preference(
+                                superior=str(alternative_1.id), inferior=str(alternative_2.id)
+                            ))
 
-                    if alternative_2.reference_ranking == ref_ranking_unique_list_sorted[ref_ranking_index]:
-                        indifferences_list.append(uged.Indifference(
-                            equal1=str(alternative_1.id), equal2=str(alternative_2.id)
-                        ))
+                        if alternative_2.reference_ranking == ref_ranking_unique_list_sorted[ref_ranking_index]:
+                            indifferences_list.append(uged.Indifference(
+                                equal1=str(alternative_1.id), equal2=str(alternative_2.id)
+                            ))
 
         solver = Solver()
         ranking = solver.get_ranking_dict(
@@ -507,6 +553,28 @@ class PreferenceIntensityDetail(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = PreferenceIntensitySerializer
     queryset = PreferenceIntensity.objects.all()
     lookup_url_kwarg = 'preference_intensity_pk'
+
+
+class PairwiseComparisonList(generics.ListCreateAPIView):
+    permission_classes = [IsOwnerOfProject]
+    serializer_class = PairwiseComparisonSerializer
+
+    def get_queryset(self):
+        project_id = self.kwargs.get('project_pk')
+        pairwise_comparisons = PairwiseComparison.objects.filter(project=project_id)
+        return pairwise_comparisons
+
+    def perform_create(self, serializer):
+        project_id = self.kwargs.get('project_pk')
+        project = Project.objects.filter(id=project_id).first()
+        serializer.save(project=project)
+
+
+class PairwiseComparisonDetail(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsOwnerOfPairwiseComparison]
+    serializer_class = PairwiseComparisonSerializer
+    queryset = PairwiseComparison.objects.all()
+    lookup_url_kwarg = 'pairwise_comparison_pk'
 
 
 # FileUpload
