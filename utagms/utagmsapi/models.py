@@ -52,6 +52,10 @@ class Alternative(models.Model):
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="alternatives")
     reference_ranking = models.IntegerField(blank=True, null=True, help_text="Alternative reference ranking")
     ranking = models.IntegerField(help_text="Alternative ranking")
+    worst_position = models.IntegerField(blank=True, null=True,
+                                          help_text="Worst position the alternative can have in the final ranking")
+    best_position = models.IntegerField(blank=True, null=True,
+                                           help_text="Best position the alternative can have in the final ranking")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
