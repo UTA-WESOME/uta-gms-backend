@@ -412,7 +412,7 @@ class ProjectResults(APIView):
                             ))
 
         solver = Solver()
-        ranking = solver.get_ranking_dict(
+        ranking = solver.get_representative_value_function_dict(
             performances,
             preferences_list,
             indifferences_list,
@@ -423,6 +423,7 @@ class ProjectResults(APIView):
         for i, (key, value) in enumerate(sorted(ranking.items(), key=lambda x: -x[1]), start=1):
             alternative = Alternative.objects.filter(id=int(key)).first()
             alternative.ranking = i
+            alternative.ranking_value = value
             alternative.save()
 
         hasse_graph = solver.get_hasse_diagram_dict(
