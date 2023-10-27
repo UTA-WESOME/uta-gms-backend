@@ -22,8 +22,7 @@ from .models import (
     Criterion,
     Alternative,
     Performance,
-    CriterionFunction,
-    HasseGraph,
+    CriterionFunctionPoint,
     PreferenceIntensity,
     PairwiseComparison
 )
@@ -42,12 +41,11 @@ from .serializers import (
     CriterionSerializer,
     AlternativeSerializer,
     PerformanceSerializer,
-    CriterionFunctionSerializer,
-    HasseGraphSerializer,
     PerformanceSerializerUpdate,
     PreferenceIntensitySerializer,
     ProjectSerializerWhole,
-    PairwiseComparisonSerializer
+    PairwiseComparisonSerializer,
+    CriterionFunctionPointSerializer
 )
 
 
@@ -347,8 +345,8 @@ class ProjectResults(APIView):
         weights_sum = sum(Criterion.objects.filter(project=project).order_by('id').values_list('weight', flat=True))
 
         # get criteria
-        criteria = [uged.Criterion(criterion_id=str(c.id), weight=c.weight / weights_sum, gain=c.gain)
-                    for c in Criterion.objects.filter(project=project)]
+        criteria_uged = [uged.Criterion(criterion_id=str(c.id), weight=c.weight / weights_sum, gain=c.gain)
+                         for c in Criterion.objects.filter(project=project)]
 
         # get alternatives
         alternatives = Alternative.objects.filter(project=project)
@@ -411,12 +409,13 @@ class ProjectResults(APIView):
                                 equal1=str(alternative_1.id), equal2=str(alternative_2.id)
                             ))
 
+        # RANKING
         solver = Solver()
         ranking = solver.get_representative_value_function_dict(
             performances,
             preferences_list,
             indifferences_list,
-            criteria,
+            criteria_uged,
         )
 
         # updating alternatives with ranking values
@@ -426,11 +425,30 @@ class ProjectResults(APIView):
             alternative.ranking_value = value
             alternative.save()
 
+        # updating criterion functions
+        criteria = Criterion.objects.filter(project=project)
+        for criterion in criteria:
+            criterion_function_points = CriterionFunctionPoint.objects.filter(criterion=criterion)
+            criterion_function_points.delete()
+
+            # TODO - change to use data from uta-gms-engine
+            import random
+            random_points = sorted([(x, random.uniform(0, 1)) for x in random.sample(range(1, 40), 8)],
+                                   key=lambda x: x[0])
+            for x, y in random_points:
+                point = CriterionFunctionPointSerializer(data={
+                    'ordinate': y,
+                    'abscissa': x,
+                })
+                if point.is_valid():
+                    point.save(criterion=criterion)
+
+        # HASSE GRAPH
         hasse_graph = solver.get_hasse_diagram_dict(
             performances,
             preferences_list,
             indifferences_list,
-            criteria
+            criteria_uged
         )
 
         # change data to integer ids and to list
@@ -509,28 +527,6 @@ class PerformanceDetail(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = PerformanceSerializerUpdate
     queryset = Performance.objects.all()
     lookup_url_kwarg = 'performance_pk'
-
-
-# CriterionFunction
-class CriterionFunctionList(generics.ListCreateAPIView):
-    queryset = CriterionFunction.objects.all()
-    serializer_class = CriterionFunctionSerializer
-
-
-class CriterionFunctionDetail(generics.RetrieveUpdateDestroyAPIView):
-    queryset = CriterionFunction.objects.all()
-    serializer_class = CriterionFunctionSerializer
-
-
-# HasseGraph
-class HasseGraphList(generics.ListCreateAPIView):
-    queryset = HasseGraph.objects.all()
-    serializer_class = HasseGraphSerializer
-
-
-class HasseGraphDetail(generics.RetrieveUpdateDestroyAPIView):
-    queryset = HasseGraph.objects.all()
-    serializer_class = HasseGraphSerializer
 
 
 # PreferenceIntensity
