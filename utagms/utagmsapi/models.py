@@ -75,8 +75,8 @@ class Performance(models.Model):
         ordering = ("criterion", "alternative",)
 
 
-class CriterionFunction(models.Model):
-    criterion = models.ForeignKey(Criterion, on_delete=models.CASCADE, related_name="criterion_functions")
+class CriterionFunctionPoint(models.Model):
+    criterion = models.ForeignKey(Criterion, on_delete=models.CASCADE, related_name="criterion_function_points")
     ordinate = models.FloatField(help_text="Ordinate")
     abscissa = models.FloatField(help_text="Abscissa")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -84,17 +84,6 @@ class CriterionFunction(models.Model):
 
     class Meta:
         ordering = ("criterion",)
-
-
-class HasseGraph(models.Model):
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="hasse_graphs")
-    alternative_up = models.ForeignKey(Alternative, on_delete=models.CASCADE, related_name="hasse_graphs_up")
-    alternative_down = models.ForeignKey(Alternative, on_delete=models.CASCADE, related_name="hasse_graphs_down")
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ("project", "alternative_up", "alternative_down",)
 
 
 class PreferenceIntensity(models.Model):
