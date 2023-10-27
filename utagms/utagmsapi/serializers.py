@@ -3,7 +3,14 @@ from rest_framework import serializers
 from rest_framework.exceptions import ValidationError, MethodNotAllowed
 
 from utagmsapi import models
-from utagmsapi.models import Performance, Criterion, Alternative, PreferenceIntensity, PairwiseComparison
+from utagmsapi.models import (
+    Performance,
+    Criterion,
+    Alternative,
+    PreferenceIntensity,
+    PairwiseComparison,
+    CriterionFunctionPoint
+)
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -38,7 +45,7 @@ class ProjectSerializerWhole(serializers.ModelSerializer):
 
     def get_criteria(self, obj):
         criteria = Criterion.objects.filter(project=obj)
-        return CriterionSerializer(criteria, many=True).data
+        return CriterionSerializerWithFunctions(criteria, many=True).data
 
     def get_alternatives(self, obj):
         alternatives = Alternative.objects.filter(project=obj)
@@ -67,6 +74,18 @@ class CriterionSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.Criterion
         exclude = ['project']
+
+
+class CriterionSerializerWithFunctions(serializers.ModelSerializer):
+    criterion_function_points = serializers.SerializerMethodField()
+
+    def get_criterion_function_points(self, obj):
+        criterion_function_points = CriterionFunctionPoint.objects.filter(criterion=obj)
+        return CriterionFunctionPointSerializer(criterion_function_points, many=True).data
+
+    class Meta:
+        model = models.Criterion
+        fields = '__all__'
 
 
 class AlternativeSerializer(serializers.ModelSerializer):
@@ -124,16 +143,10 @@ class PerformanceSerializerUpdate(serializers.ModelSerializer):
         }
 
 
-class CriterionFunctionSerializer(serializers.ModelSerializer):
+class CriterionFunctionPointSerializer(serializers.ModelSerializer):
     class Meta:
-        model = models.CriterionFunction
-        fields = "__all__"
-
-
-class HasseGraphSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = models.HasseGraph
-        fields = "__all__"
+        model = models.CriterionFunctionPoint
+        exclude = ['criterion']
 
 
 class PreferenceIntensitySerializer(serializers.ModelSerializer):
