@@ -9,10 +9,6 @@ from .views import (
     AlternativeDetail,
     PerformanceList,
     PerformanceDetail,
-    CriterionFunctionList,
-    CriterionFunctionDetail,
-    HasseGraphList,
-    HasseGraphDetail,
     RegisterView,
     LoginView,
     UserView,
@@ -45,11 +41,6 @@ urlpatterns = [
 
     path('alternatives/<int:alternative_pk>/performances/', PerformanceList.as_view()),
     path('performances/<int:performance_pk>', PerformanceDetail.as_view()),
-
-    path('criteria_functions/', CriterionFunctionList.as_view()),
-    path('criteria_functions/', CriterionFunctionDetail.as_view()),
-    path('hassegraphs/', HasseGraphList.as_view()),
-    path('hassegraphs/', HasseGraphDetail.as_view()),
 
     path('projects/<int:project_pk>/preference_intensities/', PreferenceIntensityList.as_view()),
     path('preference_intensities/<int:preference_intensity_pk>', PreferenceIntensityDetail.as_view()),
