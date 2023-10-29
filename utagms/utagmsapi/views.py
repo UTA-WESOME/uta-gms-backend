@@ -619,6 +619,7 @@ class FileUpload(APIView):
                     'name': alternative,
                     'reference_ranking': 0,
                     'ranking': 0,
+                    'ranking_value': 0,
                 }
 
                 alternative_serializer = AlternativeSerializer(data=alternative_data)
