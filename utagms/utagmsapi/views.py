@@ -345,7 +345,7 @@ class ProjectResults(APIView):
         weights_sum = sum(Criterion.objects.filter(project=project).order_by('id').values_list('weight', flat=True))
 
         # get criteria
-        criteria_uged = [uged.Criterion(criterion_id=str(c.id), weight=c.weight / weights_sum, gain=c.gain)
+        criteria_uged = [uged.Criterion(criterion_id=str(c.id), number_of_linear_segments=c.linear_segments, gain=c.gain)
                          for c in Criterion.objects.filter(project=project)]
 
         # get alternatives
@@ -409,6 +409,23 @@ class ProjectResults(APIView):
                                 equal1=str(alternative_1.id), equal2=str(alternative_2.id)
                             ))
 
+        # get best-worst positions
+        best_worst_positions = []
+        alternatives_count = Alternative.objects.filter(project=project).count()
+        for alternative in Alternative.objects.filter(project=project):
+            if alternative.best_position is not None and alternative.worst_position is not None:
+                best_worst_positions.append(uged.Position(alternative_id=str(alternative.id),
+                                                          min_position=alternative.worst_position,
+                                                          max_position=alternative.best_position))
+            elif alternative.best_position is not None:
+                best_worst_positions.append(uged.Position(alternative_id=str(alternative.id),
+                                                          min_position=alternatives_count,
+                                                          max_position=alternative.best_position))
+            elif alternative.worst_position is not None:
+                best_worst_positions.append(uged.Position(alternative_id=str(alternative.id),
+                                                          min_position=alternative.worst_position,
+                                                          max_position=1))
+
         # RANKING
         solver = Solver()
         ranking = solver.get_representative_value_function_dict(
@@ -416,6 +433,7 @@ class ProjectResults(APIView):
             preferences_list,
             indifferences_list,
             criteria_uged,
+            best_worst_positions
         )
 
         # updating alternatives with ranking values
@@ -448,7 +466,8 @@ class ProjectResults(APIView):
             performances,
             preferences_list,
             indifferences_list,
-            criteria_uged
+            criteria_uged,
+            best_worst_positions
         )
 
         # change data to integer ids and to list
