@@ -10,7 +10,8 @@ from utagmsapi.models import (
     PreferenceIntensity,
     PairwiseComparison,
     CriterionFunctionPoint,
-    CriterionCategory
+    CriterionCategory,
+    Category
 )
 
 
@@ -40,13 +41,18 @@ class ProjectSerializer(serializers.ModelSerializer):
 
 class ProjectSerializerWhole(serializers.ModelSerializer):
     criteria = serializers.SerializerMethodField()
+    categories = serializers.SerializerMethodField()
     alternatives = serializers.SerializerMethodField()
     preference_intensities = serializers.SerializerMethodField()
     pairwise_comparisons = serializers.SerializerMethodField()
 
     def get_criteria(self, obj):
         criteria = Criterion.objects.filter(project=obj)
-        return CriterionSerializerWithFunctions(criteria, many=True).data
+        return CriterionSerializerWhole(criteria, many=True).data
+
+    def get_categories(self, obj):
+        categories = Category.objects.filter(project=obj)
+        return CategorySerializer(categories, many=True).data
 
     def get_alternatives(self, obj):
         alternatives = Alternative.objects.filter(project=obj)
@@ -96,14 +102,27 @@ class CriterionCategorySerializer(serializers.ModelSerializer):
             if criterion.project != category.project:
                 raise ValidationError({"details": "criterion and category do not belong to the same project"})
 
-            criterion_category = CriterionCategory.objects.filter(criterion=criterion).filter(category=category).first()
-            if criterion_category:
-                raise ValidationError({"details": "criterion_category already exists"})
-
         super().save(criterion=criterion)
 
+    def create(self, validated_data):
+        criterion = validated_data.get('criterion')
+        category = validated_data.get('category')
+        criterion_category = CriterionCategory.objects.filter(criterion=criterion).filter(category=category).first()
+        if criterion_category:
+            raise ValidationError({"details": "criterion_category already exists"})
+        return super().create(validated_data)
 
-class CriterionSerializerWithFunctions(serializers.ModelSerializer):
+    def update(self, instance, validated_data):
+        category = validated_data.get('category')
+        criterion = validated_data.get('criterion')
+        criterion_category = CriterionCategory.objects.filter(criterion=criterion).filter(category=category).first()
+        if criterion_category and instance.id != criterion_category.id:
+            raise ValidationError({"details": "criterion_category already exists"})
+
+        return super().update(instance, validated_data)
+
+
+class CriterionSerializerWhole(serializers.ModelSerializer):
     criterion_function_points = serializers.SerializerMethodField()
     criterion_categories = serializers.SerializerMethodField()
 
