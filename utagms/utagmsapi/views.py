@@ -24,7 +24,9 @@ from .models import (
     Performance,
     CriterionFunctionPoint,
     PreferenceIntensity,
-    PairwiseComparison
+    PairwiseComparison,
+    Category,
+    CriterionCategory
 )
 from .permissions import (
     IsOwnerOfProject,
@@ -33,7 +35,9 @@ from .permissions import (
     IsOwnerOfAlternative,
     IsOwnerOfPerformance,
     IsOwnerOfPreferenceIntensity,
-    IsOwnerOfPairwiseComparison
+    IsOwnerOfPairwiseComparison,
+    IsOwnerOfCategory,
+    IsOwnerOfCriterionCategory
 )
 from .serializers import (
     UserSerializer,
@@ -45,7 +49,9 @@ from .serializers import (
     PreferenceIntensitySerializer,
     ProjectSerializerWhole,
     PairwiseComparisonSerializer,
-    CriterionFunctionPointSerializer
+    CriterionFunctionPointSerializer,
+    CategorySerializer,
+    CriterionCategorySerializer
 )
 
 
@@ -479,6 +485,29 @@ class ProjectResults(APIView):
         return Response(project_serializer.data)
 
 
+# Category
+class CategoryList(generics.ListCreateAPIView):
+    permission_classes = [IsOwnerOfProject]
+    serializer_class = CategorySerializer
+
+    def get_queryset(self):
+        project_id = self.kwargs.get("project_pk")
+        categories = Category.objects.filter(project=project_id)
+        return categories
+
+    def perform_create(self, serializer):
+        project_id = self.kwargs.get("project_pk")
+        project = Project.objects.filter(id=project_id).first()
+        serializer.save(project=project)
+
+
+class CategoryDetail(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsOwnerOfCategory]
+    serializer_class = CategorySerializer
+    queryset = Category.objects.all()
+    lookup_url_kwarg = 'category_pk'
+
+
 # Criterion
 class CriterionList(generics.ListCreateAPIView):
     permission_classes = [IsOwnerOfProject]
@@ -500,6 +529,28 @@ class CriterionDetail(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = CriterionSerializer
     queryset = Criterion.objects.all()
     lookup_url_kwarg = 'criterion_pk'
+
+
+# CriterionCategory
+class CriterionCategoryList(generics.ListCreateAPIView):
+    permission_classes = [IsOwnerOfCriterion]
+    serializer_class = CriterionCategorySerializer
+
+    def get_queryset(self):
+        criterion_id = self.kwargs.get("criterion_pk")
+        return CriterionCategory.objects.filter(criterion=criterion_id)
+
+    def perform_create(self, serializer):
+        criterion_id = self.kwargs.get("criterion_pk")
+        criterion = Criterion.objects.filter(id=criterion_id).first()
+        serializer.save(criterion=criterion)
+
+
+class CriterionCategoryDetail(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsOwnerOfCriterionCategory]
+    serializer_class = CriterionCategorySerializer
+    queryset = CriterionCategory.objects.all()
+    lookup_url_kwarg = 'criterion_category_pk'
 
 
 # Alternative

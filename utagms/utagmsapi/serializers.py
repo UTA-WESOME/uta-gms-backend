@@ -9,7 +9,8 @@ from utagmsapi.models import (
     Alternative,
     PreferenceIntensity,
     PairwiseComparison,
-    CriterionFunctionPoint
+    CriterionFunctionPoint,
+    CriterionCategory
 )
 
 
@@ -70,18 +71,49 @@ class ProjectSerializerWhole(serializers.ModelSerializer):
         raise MethodNotAllowed("Update operation not allowed")
 
 
+class CategorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.Category
+        exclude = ['project']
+
+
 class CriterionSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.Criterion
         exclude = ['project']
 
 
+class CriterionCategorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.CriterionCategory
+        exclude = ['criterion']
+
+    def save(self, **kwargs):
+        criterion = kwargs.get('criterion')
+        if criterion:
+
+            category = self.validated_data.get('category')
+            if criterion.project != category.project:
+                raise ValidationError({"details": "criterion and category do not belong to the same project"})
+
+            criterion_category = CriterionCategory.objects.filter(criterion=criterion).filter(category=category).first()
+            if criterion_category:
+                raise ValidationError({"details": "criterion_category already exists"})
+
+        super().save(criterion=criterion)
+
+
 class CriterionSerializerWithFunctions(serializers.ModelSerializer):
     criterion_function_points = serializers.SerializerMethodField()
+    criterion_categories = serializers.SerializerMethodField()
 
     def get_criterion_function_points(self, obj):
         criterion_function_points = CriterionFunctionPoint.objects.filter(criterion=obj)
         return CriterionFunctionPointSerializer(criterion_function_points, many=True).data
+
+    def get_criterion_categories(self, obj):
+        criterion_categories = CriterionCategory.objects.filter(criterion=obj)
+        return CriterionCategorySerializer(criterion_categories, many=True).data
 
     class Meta:
         model = models.Criterion
