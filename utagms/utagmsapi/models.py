@@ -30,6 +30,13 @@ class Project(models.Model):
         ordering = ("name", "user",)
 
 
+class Category(models.Model):
+    name = models.CharField(max_length=64, help_text="Category name")
+    color = models.CharField(max_length=7, help_text="Hex representation of the color")
+    active = models.BooleanField(default=True, help_text="Should the category be used in calculating results?")
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="categories")
+
+
 class Criterion(models.Model):
     name = models.CharField(max_length=64, help_text="Criterion name")
     gain = models.BooleanField(help_text="Criterion is the type of gain")
@@ -45,6 +52,16 @@ class Criterion(models.Model):
 
     class Meta:
         ordering = ("name",)
+
+
+class CriterionCategory(models.Model):
+    category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name="criterion_categories")
+    criterion = models.ForeignKey(Criterion, on_delete=models.CASCADE, related_name="criterion_categories")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ('category',)
 
 
 class Alternative(models.Model):
