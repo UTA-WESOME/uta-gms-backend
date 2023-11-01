@@ -410,6 +410,11 @@ class ProjectResults(APIView):
             .filter(Q(active_category_count__gt=0) | Q(criterion_categories_count=0))
         ]
 
+        # sanity check: we need at least one criterion
+        if len(criteria_uged) == 0:
+            return Response({"details": "There are no active criteria! Please make at least one category active."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
         # get alternatives
         alternatives = Alternative.objects.filter(project=project)
 
