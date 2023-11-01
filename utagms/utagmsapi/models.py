@@ -32,9 +32,11 @@ class Project(models.Model):
 
 class Category(models.Model):
     name = models.CharField(max_length=64, help_text="Category name")
-    color = models.CharField(max_length=7, help_text="Hex representation of the color")
+    color = models.CharField(max_length=15, help_text="Color of the category")
     active = models.BooleanField(default=True, help_text="Should the category be used in calculating results?")
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="categories")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
 
 class Criterion(models.Model):

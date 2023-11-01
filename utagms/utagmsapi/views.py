@@ -7,6 +7,7 @@ import utagmsengine.dataclasses as uged
 from django.conf import settings
 from django.contrib.auth.hashers import check_password
 from django.db import transaction
+from django.db.models import Count, Q
 from rest_framework import generics
 from rest_framework import status
 from rest_framework.exceptions import AuthenticationFailed, ValidationError
@@ -403,17 +404,28 @@ class ProjectResults(APIView):
         criteria_uged = [
             uged.Criterion(criterion_id=str(c.id), number_of_linear_segments=c.linear_segments, gain=c.gain)
             for c in Criterion.objects.filter(project=project)
+            .annotate(active_category_count=Count('criterion_categories__category',
+                                                  filter=Q(criterion_categories__category__active=True)))
+            .annotate(criterion_categories_count=Count('criterion_categories'))
+            .filter(Q(active_category_count__gt=0) | Q(criterion_categories_count=0))
         ]
 
         # get alternatives
         alternatives = Alternative.objects.filter(project=project)
 
         # get performance_table_list
+        # we need performances only from criteria that have at least one category marked as active or no categories
         performances = {}
         for alternative in alternatives:
             performances[str(alternative.id)] = {
                 str(criterion_id): value for criterion_id, value in
-                Performance.objects.filter(alternative=alternative).values_list('criterion', 'value')
+                Performance.objects
+                .filter(alternative=alternative)
+                .annotate(active_category_count=Count('criterion__criterion_categories__category',
+                                                      filter=Q(criterion__criterion_categories__category__active=True)))
+                .annotate(criterion_categories_count=Count('criterion__criterion_categories'))
+                .filter(Q(active_category_count__gt=0) | Q(criterion_categories_count=0))
+                .values_list('criterion', 'value')
             }
 
         # get preferences and indifferences
