@@ -309,6 +309,10 @@ class ProjectBatch(APIView):
         alternatives_ids_to_delete = set(alternatives_ids_db) - set(alternatives_ids_request)
         project.alternatives.filter(id__in=alternatives_ids_to_delete).delete()
 
+        # if at least one alternative was deleted, we have to reset the hasse_graph
+        project.hasse_graph = {}
+        project.save()
+
         # if there exists an alternative with provided ID in the project, we update it
         # if there does not exist an alternative with provided ID in the project, we insert it (with a new id)
         for alternative_data in alternatives_data:
