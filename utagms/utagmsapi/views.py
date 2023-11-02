@@ -603,6 +603,8 @@ class FileUpload(APIView):
                 curr_criteria = Criterion.objects.filter(project=project)
                 curr_alternatives.delete()
                 curr_criteria.delete()
+                project.hasse_graph = {}
+                project.save()
 
                 try:
                     parser = Parser()
@@ -614,7 +616,6 @@ class FileUpload(APIView):
                                     status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
                 # criteria
-                print(criterion_list)
                 for criterion in criterion_list:
                     criterion_data = {
                         'name': criterion.criterion_id,
@@ -627,7 +628,6 @@ class FileUpload(APIView):
                         criterion_serializer.save(project=project)
 
                 # alternatives
-                print(performance_table_list.keys())
                 for alternative in performance_table_list.keys():
                     alternative_data = {
                         'name': alternative,
@@ -641,7 +641,6 @@ class FileUpload(APIView):
                         alternative_serializer.save(project=project)
 
                 # performances
-                print(performance_table_list.items())
                 criteria = Criterion.objects.all().filter(project=project)
                 alternatives = Alternative.objects.all().filter(project=project)
                 for alternative_name, alternative_data in performance_table_list.items():
@@ -701,6 +700,8 @@ class FileUpload(APIView):
             xml_file = ordered_files_dict["alternatives"]
             curr_alternatives = Alternative.objects.filter(project=project)
             curr_alternatives.delete()
+            project.hasse_graph = {}
+            project.save()
             try:
                 parser = Parser()
                 alternative_dict = parser.get_alternative_dict_xmcda(xml_file)
