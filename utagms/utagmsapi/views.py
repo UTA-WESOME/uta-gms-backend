@@ -415,27 +415,36 @@ class ProjectResults(APIView):
         for alternative in Alternative.objects.filter(project=project):
             if alternative.best_position is not None and alternative.worst_position is not None:
                 best_worst_positions.append(uged.Position(alternative_id=str(alternative.id),
-                                                          min_position=alternative.worst_position,
-                                                          max_position=alternative.best_position))
+                                                          worst_position=alternative.worst_position,
+                                                          best_position=alternative.best_position))
             elif alternative.best_position is not None:
                 best_worst_positions.append(uged.Position(alternative_id=str(alternative.id),
-                                                          min_position=alternatives_count,
-                                                          max_position=alternative.best_position))
+                                                          worst_position=alternatives_count,
+                                                          best_position=alternative.best_position))
             elif alternative.worst_position is not None:
                 best_worst_positions.append(uged.Position(alternative_id=str(alternative.id),
-                                                          min_position=alternative.worst_position,
-                                                          max_position=1))
+                                                          worst_position=alternative.worst_position,
+                                                          best_position=1))
 
         # RANKING
         solver = Solver()
+        print(f"{performances=}")
+        print(f"{preferences_list=}")
+        print(f"{indifferences_list=}")
+        print(f"{criteria_uged=}")
+        print(f"{best_worst_positions=}")
         ranking, functions, samples = solver.get_representative_value_function_dict(
             performances,
             preferences_list,
             indifferences_list,
             criteria_uged,
             best_worst_positions,
-            'java/polyrun-1.1.0-jar-with-dependencies.jar'
+            'java/polyrun-1.1.0-jar-with-dependencies.jar',
+            '10'
         )
+
+        print(functions)
+        print(samples)
 
         # updating alternatives with ranking values
         for i, (key, value) in enumerate(sorted(ranking.items(), key=lambda x: -x[1]), start=1):
