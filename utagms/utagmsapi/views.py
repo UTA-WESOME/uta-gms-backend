@@ -506,22 +506,16 @@ class ProjectResults(APIView):
 
         # RANKING
         solver = Solver()
-        print(f"{performances=}")
-        print(f"{preferences_list=}")
-        print(f"{indifferences_list=}")
-        print(f"{criteria_uged=}")
-        print(f"{best_worst_positions=}")
         ranking, functions, samples = solver.get_representative_value_function_dict(
             performances,
             preferences_list,
             indifferences_list,
             criteria_uged,
             best_worst_positions,
-            'java/polyrun-1.1.0-jar-with-dependencies.jar',
+            '/sampler/polyrun-1.1.0-jar-with-dependencies.jar',
             '10'
         )
 
-        print(functions)
         print(samples)
 
         # updating alternatives with ranking values
