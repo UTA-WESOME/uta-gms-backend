@@ -9,7 +9,7 @@ from utagmsapi.models import (
     PreferenceIntensity,
     PairwiseComparison,
     Category,
-    CriterionCategory
+    CriterionCategory, Ranking
 )
 
 from utagmsapi.utils.jwt import get_user_from_jwt
@@ -123,7 +123,7 @@ class IsOwnerOfCriterionCategory(permissions.BasePermission):
         criterion_category = CriterionCategory.objects.filter(id=criterion_category_pk).first()
 
         # check if performance belongs to the user
-        return criterion_category.criterion.project.user == user
+        return criterion_category.category.project.user == user
 
 
 class IsOwnerOfAlternative(permissions.BasePermission):
@@ -191,7 +191,7 @@ class IsOwnerOfPreferenceIntensity(permissions.BasePermission):
             return False
         preference_intensity = PreferenceIntensity.objects.filter(id=preference_intensity_pk).first()
 
-        return preference_intensity.project.user == user
+        return preference_intensity.category.project.user == user
 
 
 class IsOwnerOfPairwiseComparison(permissions.BasePermission):
@@ -212,4 +212,25 @@ class IsOwnerOfPairwiseComparison(permissions.BasePermission):
             return False
         pairwise_comparison = PairwiseComparison.objects.filter(id=pairwise_comparison_pk).first()
 
-        return pairwise_comparison.project.user == user
+        return pairwise_comparison.category.project.user == user
+
+
+class IsOwnerOfRanking(permissions.BasePermission):
+
+    def has_permission(self, request, view):
+        # get user
+        token = request.COOKIES.get('access_token')
+        if token is None:
+            return False
+        try:
+            user = get_user_from_jwt(token)
+        except (jwt.ExpiredSignatureError, jwt.InvalidSignatureError):
+            return False
+
+        # get ranking
+        ranking_pk = view.kwargs.get('ranking_pk')
+        if ranking_pk is None:
+            return False
+        ranking = Ranking.objects.filter(id=ranking_pk).first()
+
+        return ranking.category.project.user == user
