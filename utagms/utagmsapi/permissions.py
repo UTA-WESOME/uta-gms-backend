@@ -1,7 +1,17 @@
 import jwt
 from rest_framework import permissions
 
-from utagmsapi.models import Project, Criterion, Alternative, Performance, PreferenceIntensity, PairwiseComparison
+from utagmsapi.models import (
+    Project,
+    Criterion,
+    Alternative,
+    Performance,
+    PreferenceIntensity,
+    PairwiseComparison,
+    Category,
+    CriterionCategory
+)
+
 from utagmsapi.utils.jwt import get_user_from_jwt
 
 
@@ -47,6 +57,29 @@ class IsOwnerOfProject(permissions.BasePermission):
         return project.user == user
 
 
+class IsOwnerOfCategory(permissions.BasePermission):
+
+    def has_permission(self, request, view):
+
+        # get user
+        token = request.COOKIES.get('access_token')
+        if token is None:
+            return False
+        try:
+            user = get_user_from_jwt(token)
+        except (jwt.ExpiredSignatureError, jwt.InvalidSignatureError):
+            return False
+
+        # get category
+        category_pk = view.kwargs.get('category_pk')
+        if category_pk is None:
+            return False
+        category = Category.objects.filter(id=category_pk).first()
+
+        # check if criterion's project user is the same as the one making the request
+        return category.project.user == user
+
+
 class IsOwnerOfCriterion(permissions.BasePermission):
 
     def has_permission(self, request, view):
@@ -68,6 +101,29 @@ class IsOwnerOfCriterion(permissions.BasePermission):
 
         # check if criterion's project user is the same as the one making the request
         return criterion.project.user == user
+
+
+class IsOwnerOfCriterionCategory(permissions.BasePermission):
+
+    def has_permission(self, request, view):
+
+        # get user
+        token = request.COOKIES.get('access_token')
+        if token is None:
+            return False
+        try:
+            user = get_user_from_jwt(token)
+        except (jwt.ExpiredSignatureError, jwt.InvalidSignatureError):
+            return False
+
+        # get criterion_category
+        criterion_category_pk = view.kwargs.get('criterion_category_pk')
+        if criterion_category_pk is None:
+            return False
+        criterion_category = CriterionCategory.objects.filter(id=criterion_category_pk).first()
+
+        # check if performance belongs to the user
+        return criterion_category.criterion.project.user == user
 
 
 class IsOwnerOfAlternative(permissions.BasePermission):

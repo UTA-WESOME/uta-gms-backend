@@ -7,6 +7,7 @@ import utagmsengine.dataclasses as uged
 from django.conf import settings
 from django.contrib.auth.hashers import check_password
 from django.db import transaction
+from django.db.models import Count, Q
 from rest_framework import generics
 from rest_framework import status
 from rest_framework.exceptions import AuthenticationFailed, ValidationError
@@ -24,7 +25,9 @@ from .models import (
     Performance,
     CriterionFunctionPoint,
     PreferenceIntensity,
-    PairwiseComparison
+    PairwiseComparison,
+    Category,
+    CriterionCategory
 )
 from .permissions import (
     IsOwnerOfProject,
@@ -33,7 +36,9 @@ from .permissions import (
     IsOwnerOfAlternative,
     IsOwnerOfPerformance,
     IsOwnerOfPreferenceIntensity,
-    IsOwnerOfPairwiseComparison
+    IsOwnerOfPairwiseComparison,
+    IsOwnerOfCategory,
+    IsOwnerOfCriterionCategory
 )
 from .serializers import (
     UserSerializer,
@@ -45,7 +50,9 @@ from .serializers import (
     PreferenceIntensitySerializer,
     ProjectSerializerWhole,
     PairwiseComparisonSerializer,
-    CriterionFunctionPointSerializer
+    CriterionFunctionPointSerializer,
+    CategorySerializer,
+    CriterionCategorySerializer
 )
 
 
@@ -209,9 +216,38 @@ class ProjectBatch(APIView):
 
         # get data from request
         criteria_data = data.get("criteria", [])
+        categories_data = data.get("categories", [])
         alternatives_data = data.get("alternatives", [])
         pref_intensities_data = data.get("preference_intensities", [])
         pairwise_comparisons_data = data.get("pairwise_comparisons", [])
+
+        # Categories
+        # if there are categories that were not in the payload, we delete them
+        categories_ids_db = project.categories.values_list('id', flat=True)
+        categories_ids_request = [category_data.get('id') for category_data in categories_data]
+        categories_ids_to_delete = set(categories_ids_db) - set(categories_ids_request)
+        project.categories.filter(id__in=categories_ids_to_delete).delete()
+
+        # if there exists a category with provided ID in the project, we update it
+        # if there does not exist a category with provided ID in the project, we insert it (with a new id)
+        for category_data in categories_data:
+            category_id = category_data.get('id')
+
+            try:
+                category = project.categories.get(id=category_id)
+                category_serializer = CategorySerializer(category, data=category_data)
+            except Category.DoesNotExist:
+                category_serializer = CategorySerializer(data=category_data)
+
+            if category_serializer.is_valid():
+                category = category_serializer.save(project=project)
+
+                # update category id in criterion_categories
+                for criterion_data in criteria_data:
+                    ccs_data = criterion_data.get('criterion_categories', [])
+                    for cc_data in ccs_data:
+                        if cc_data.get('category', -1) == category_id:
+                            cc_data['category'] = category.id
 
         # Criteria
         # if there are criteria that were not in the payload, we delete them
@@ -246,12 +282,36 @@ class ProjectBatch(APIView):
                     if pref_intensity_data.get('criterion', -1) == criterion_id:
                         pref_intensity_data['criterion'] = criterion.id
 
+                # Categories for this criterion
+                ccs_data = criterion_data.get('criterion_categories', [])
+
+                ccs_ids_db = criterion.criterion_categories.values_list('id', flat=True)
+                ccs_ids_request = [cc_data.get('id') for cc_data in ccs_data]
+                ccs_ids_to_delete = set(ccs_ids_db) - set(ccs_ids_request)
+                criterion.criterion_categories.filter(id__in=ccs_ids_to_delete).delete()
+
+                for cc_data in ccs_data:
+                    cc_id = cc_data.get('id')
+
+                    try:
+                        criterion_category = criterion.criterion_categories.get(id=cc_id)
+                        cc_serializer = CriterionCategorySerializer(criterion_category, data=cc_data)
+                    except CriterionCategory.DoesNotExist:
+                        cc_serializer = CriterionCategorySerializer(data=cc_data)
+
+                    if cc_serializer.is_valid():
+                        cc_serializer.save(criterion=criterion)
+
         # Alternatives
         # if there are alternatives that were not in the payload, we delete them
         alternatives_ids_db = project.alternatives.values_list('id', flat=True)
         alternatives_ids_request = [alternative_data.get('id') for alternative_data in alternatives_data]
         alternatives_ids_to_delete = set(alternatives_ids_db) - set(alternatives_ids_request)
         project.alternatives.filter(id__in=alternatives_ids_to_delete).delete()
+
+        # if at least one alternative was deleted, we have to reset the hasse_graph
+        project.hasse_graph = {}
+        project.save()
 
         # if there exists an alternative with provided ID in the project, we update it
         # if there does not exist an alternative with provided ID in the project, we insert it (with a new id)
@@ -345,18 +405,36 @@ class ProjectResults(APIView):
         weights_sum = sum(Criterion.objects.filter(project=project).order_by('id').values_list('weight', flat=True))
 
         # get criteria
-        criteria_uged = [uged.Criterion(criterion_id=str(c.id), number_of_linear_segments=c.linear_segments, gain=c.gain)
-                         for c in Criterion.objects.filter(project=project)]
+        criteria_uged = [
+            uged.Criterion(criterion_id=str(c.id), number_of_linear_segments=c.linear_segments, gain=c.gain)
+            for c in Criterion.objects.filter(project=project)
+            .annotate(active_category_count=Count('criterion_categories__category',
+                                                  filter=Q(criterion_categories__category__active=True)))
+            .annotate(criterion_categories_count=Count('criterion_categories'))
+            .filter(Q(active_category_count__gt=0) | Q(criterion_categories_count=0))
+        ]
+
+        # sanity check: we need at least one criterion
+        if len(criteria_uged) == 0:
+            return Response({"details": "There are no active criteria! Please make at least one category active."},
+                            status=status.HTTP_400_BAD_REQUEST)
 
         # get alternatives
         alternatives = Alternative.objects.filter(project=project)
 
         # get performance_table_list
+        # we need performances only from criteria that have at least one category marked as active or no categories
         performances = {}
         for alternative in alternatives:
             performances[str(alternative.id)] = {
                 str(criterion_id): value for criterion_id, value in
-                Performance.objects.filter(alternative=alternative).values_list('criterion', 'value')
+                Performance.objects
+                .filter(alternative=alternative)
+                .annotate(active_category_count=Count('criterion__criterion_categories__category',
+                                                      filter=Q(criterion__criterion_categories__category__active=True)))
+                .annotate(criterion_categories_count=Count('criterion__criterion_categories'))
+                .filter(Q(active_category_count__gt=0) | Q(criterion_categories_count=0))
+                .values_list('criterion', 'value')
             }
 
         # get preferences and indifferences
@@ -485,6 +563,29 @@ class ProjectResults(APIView):
         return Response(project_serializer.data)
 
 
+# Category
+class CategoryList(generics.ListCreateAPIView):
+    permission_classes = [IsOwnerOfProject]
+    serializer_class = CategorySerializer
+
+    def get_queryset(self):
+        project_id = self.kwargs.get("project_pk")
+        categories = Category.objects.filter(project=project_id)
+        return categories
+
+    def perform_create(self, serializer):
+        project_id = self.kwargs.get("project_pk")
+        project = Project.objects.filter(id=project_id).first()
+        serializer.save(project=project)
+
+
+class CategoryDetail(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsOwnerOfCategory]
+    serializer_class = CategorySerializer
+    queryset = Category.objects.all()
+    lookup_url_kwarg = 'category_pk'
+
+
 # Criterion
 class CriterionList(generics.ListCreateAPIView):
     permission_classes = [IsOwnerOfProject]
@@ -506,6 +607,28 @@ class CriterionDetail(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = CriterionSerializer
     queryset = Criterion.objects.all()
     lookup_url_kwarg = 'criterion_pk'
+
+
+# CriterionCategory
+class CriterionCategoryList(generics.ListCreateAPIView):
+    permission_classes = [IsOwnerOfCriterion]
+    serializer_class = CriterionCategorySerializer
+
+    def get_queryset(self):
+        criterion_id = self.kwargs.get("criterion_pk")
+        return CriterionCategory.objects.filter(criterion=criterion_id)
+
+    def perform_create(self, serializer):
+        criterion_id = self.kwargs.get("criterion_pk")
+        criterion = Criterion.objects.filter(id=criterion_id).first()
+        serializer.save(criterion=criterion)
+
+
+class CriterionCategoryDetail(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsOwnerOfCriterionCategory]
+    serializer_class = CriterionCategorySerializer
+    queryset = CriterionCategory.objects.all()
+    lookup_url_kwarg = 'criterion_category_pk'
 
 
 # Alternative
