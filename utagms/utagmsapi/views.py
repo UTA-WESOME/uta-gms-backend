@@ -188,7 +188,17 @@ class ProjectList(generics.ListCreateAPIView):
         return queryset
 
     def perform_create(self, serializer):
-        serializer.save(user=get_user_from_jwt(self.request.COOKIES.get('access_token')))
+        user = get_user_from_jwt(self.request.COOKIES.get('access_token'))
+        project = serializer.save(user=user)
+        root_category_serializer = CategorySerializer(data={
+            'name': 'General',
+            'color': 'teal.500',
+            'active': True,
+            'hasse_diagram': {},
+            'parent': None
+        })
+        if root_category_serializer.is_valid():
+            root_category_serializer.save(project=project)
 
 
 class ProjectDetail(generics.RetrieveUpdateDestroyAPIView):
@@ -362,45 +372,63 @@ class ProjectBatch(APIView):
                 # Preference Intensities
                 pref_intensities_data = category_data.get('preference_intensities', [])
 
-                pref_intensities_ids_db = project.preference_intensities.values_list('id', flat=True)
+                pref_intensities_ids_db = category.preference_intensities.values_list('id', flat=True)
                 pref_intensities_ids_request = [pref_intensity_data.get('id')
                                                 for pref_intensity_data in pref_intensities_data]
                 pref_intensities_ids_to_delete = set(pref_intensities_ids_db) - set(pref_intensities_ids_request)
-                project.preference_intensities.filter(id__in=pref_intensities_ids_to_delete).delete()
+                category.preference_intensities.filter(id__in=pref_intensities_ids_to_delete).delete()
 
                 for pref_intensity_data in pref_intensities_data:
                     pref_intensity_id = pref_intensity_data.get('id')
                     try:
-                        pref_intensity = project.preference_intensities.get(id=pref_intensity_id)
+                        pref_intensity = category.preference_intensities.get(id=pref_intensity_id)
                         pref_intensity_serializer = PreferenceIntensitySerializer(pref_intensity,
                                                                                   data=pref_intensity_data)
                     except PreferenceIntensity.DoesNotExist:
                         pref_intensity_serializer = PreferenceIntensitySerializer(data=pref_intensity_data)
                     if pref_intensity_serializer.is_valid():
-                        pref_intensity_serializer.save(project=project)
+                        pref_intensity_serializer.save(category=category)
 
                 # Pairwise Comparisons
-                pairwise_comparisons_data = category_data.get('pairwise_comparisons_data', [])
+                pairwise_comparisons_data = category_data.get('pairwise_comparisons', [])
 
-                pairwise_comparisons_ids_db = project.pairwise_comparisons.values_list('id', flat=True)
+                pairwise_comparisons_ids_db = category.pairwise_comparisons.values_list('id', flat=True)
                 pairwise_comparisons_ids_request = [pc_data.get('id') for pc_data in pairwise_comparisons_data]
-                pairwise_comparisons_idb_to_delete = (
+                pairwise_comparisons_ids_to_delete = (
                         set(pairwise_comparisons_ids_db) - set(pairwise_comparisons_ids_request)
                 )
-                project.pairwise_comparisons.filter(id__in=pairwise_comparisons_idb_to_delete).delete()
+                category.pairwise_comparisons.filter(id__in=pairwise_comparisons_ids_to_delete).delete()
 
                 for pairwise_comparison_data in pairwise_comparisons_data:
                     pairwise_comparison_id = pairwise_comparison_data.get('id')
                     try:
-                        pairwise_comparison = project.pairwise_comparisons.get(id=pairwise_comparison_id)
+                        pairwise_comparison = category.pairwise_comparisons.get(id=pairwise_comparison_id)
                         pairwise_comparison_serializer = PairwiseComparisonSerializer(pairwise_comparison,
                                                                                       data=pairwise_comparison_data)
                     except PairwiseComparison.DoesNotExist:
                         pairwise_comparison_serializer = PairwiseComparisonSerializer(data=pairwise_comparison_data)
                     if pairwise_comparison_serializer.is_valid():
-                        pairwise_comparison_serializer.save(project=project)
+                        pairwise_comparison_serializer.save(category=category)
 
-        # if at least one alternative was deleted, we have to reset the hasse_graphs
+                # Rankings
+                rankings_data = category_data.get('rankings', [])
+
+                rankings_ids_db = category.rankings.values_list('id', flat=True)
+                rankings_ids_request = [ranking_data.get('id') for ranking_data in rankings_data]
+                rankings_ids_to_delete = set(rankings_ids_db) - set(rankings_ids_request)
+                category.rankings.filter(id__in=rankings_ids_to_delete).delete()
+
+                for ranking_data in rankings_data:
+                    ranking_id = ranking_data.get('id')
+                    try:
+                        ranking = category.rankings.get(id=ranking_id)
+                        ranking_serializer = RankingSerializer(ranking, data=ranking_data)
+                    except Ranking.DoesNotExist:
+                        ranking_serializer = RankingSerializer(data=ranking_data)
+                    if ranking_serializer.is_valid():
+                        ranking_serializer.save(category=category)
+
+        # reset the hasse_graphs
         for category in Category.objects.filter(project=project):
             category.hasse_graph = {}
             category.save()

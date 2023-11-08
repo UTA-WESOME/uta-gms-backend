@@ -114,7 +114,7 @@ class CategorySerializerWhole(serializers.ModelSerializer):
         return AcceptabilityIndexSerializer(acceptability_indices, many=True).data
 
     class Meta:
-        model = models.Criterion
+        model = models.Category
         fields = '__all__'
 
 
