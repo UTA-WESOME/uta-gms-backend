@@ -811,7 +811,7 @@ class FileUpload(APIView):
                     ordered_files_dict[match.group(1)] = uploaded_file_text
 
         if "criteria" not in ordered_files_dict:
-            return Response({'message': 'Incorrect file name'},
+            return Response({'message': 'Incorrect file configuration'},
                             status=status.HTTP_422_UNPROCESSABLE_ENTITY)
         elif "alternatives" in ordered_files_dict and "performanceTable" in ordered_files_dict:
 
@@ -891,6 +891,6 @@ class FileUpload(APIView):
 
             return Response({'message': 'Files uploaded successfully'})
 
-        return Response({'message': 'No file selected or invalid request'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'message': 'Wrong files'}, status=status.HTTP_400_BAD_REQUEST)
 
 
