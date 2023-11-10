@@ -494,26 +494,30 @@ class ProjectResults(APIView):
         for alternative in Alternative.objects.filter(project=project):
             if alternative.best_position is not None and alternative.worst_position is not None:
                 best_worst_positions.append(uged.Position(alternative_id=str(alternative.id),
-                                                          min_position=alternative.worst_position,
-                                                          max_position=alternative.best_position))
+                                                          worst_position=alternative.worst_position,
+                                                          best_position=alternative.best_position))
             elif alternative.best_position is not None:
                 best_worst_positions.append(uged.Position(alternative_id=str(alternative.id),
-                                                          min_position=alternatives_count,
-                                                          max_position=alternative.best_position))
+                                                          worst_position=alternatives_count,
+                                                          best_position=alternative.best_position))
             elif alternative.worst_position is not None:
                 best_worst_positions.append(uged.Position(alternative_id=str(alternative.id),
-                                                          min_position=alternative.worst_position,
-                                                          max_position=1))
+                                                          worst_position=alternative.worst_position,
+                                                          best_position=1))
 
         # RANKING
         solver = Solver()
-        ranking = solver.get_representative_value_function_dict(
+        ranking, functions, samples = solver.get_representative_value_function_dict(
             performances,
             preferences_list,
             indifferences_list,
             criteria_uged,
-            best_worst_positions
+            best_worst_positions,
+            '/sampler/polyrun-1.1.0-jar-with-dependencies.jar',
+            '10'
         )
+
+        print(samples)
 
         # updating alternatives with ranking values
         for i, (key, value) in enumerate(sorted(ranking.items(), key=lambda x: -x[1]), start=1):
@@ -523,16 +527,12 @@ class ProjectResults(APIView):
             alternative.save()
 
         # updating criterion functions
-        criteria = Criterion.objects.filter(project=project)
-        for criterion in criteria:
+        for criterion_id, function in functions.items():
+            criterion = Criterion.objects.get(id=int(criterion_id))
             criterion_function_points = CriterionFunctionPoint.objects.filter(criterion=criterion)
             criterion_function_points.delete()
 
-            # TODO - change to use data from uta-gms-engine
-            import random
-            random_points = sorted([(x, random.uniform(0, 1)) for x in random.sample(range(1, 40), 8)],
-                                   key=lambda x: x[0])
-            for x, y in random_points:
+            for x, y in function:
                 point = CriterionFunctionPointSerializer(data={
                     'ordinate': y,
                     'abscissa': x,
