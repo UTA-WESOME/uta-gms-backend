@@ -724,7 +724,6 @@ class FileUpload(APIView):
     @transaction.atomic
     def post(self, request, *args, **kwargs):
         uploaded_files = request.FILES.getlist('file')
-        print("Start")
 
         project_id = kwargs.get('project_pk')
         project = Project.objects.filter(id=project_id).first()
@@ -734,8 +733,7 @@ class FileUpload(APIView):
         ordered_files_dict = {}
         for uploaded_file in uploaded_files:
             if len(uploaded_file.name) < 5:
-                return Response({'message': 'Incorrect file name'},
-                                status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+                return Response({'message': 'Incorrect file name'}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
             if uploaded_file.name[-4:] == '.csv':
                 uploaded_file_text = _io.TextIOWrapper(uploaded_file, encoding='utf-8')
@@ -828,7 +826,6 @@ class FileUpload(APIView):
             parser = Parser()
             criterion_dict = parser.get_criterion_dict_xmcda(xml_file)
         except Exception as e:
-            print(str(e))
             return Response({'message': 'Incorrect file: {}'.format(str(e))},
                             status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
@@ -887,7 +884,6 @@ class FileUpload(APIView):
                     performance_data = {
                         'criterion': criterion.pk,
                         'value': value,
-                        'ranking': 0,
                     }
                     performance_serializer = PerformanceSerializer(data=performance_data)
                     if performance_serializer.is_valid():
