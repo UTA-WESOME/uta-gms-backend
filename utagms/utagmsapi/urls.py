@@ -25,6 +25,7 @@ from .views import (
     CategoryDetail,
     CriterionCategoryList,
     CriterionCategoryDetail,
+    CsvExport,
 )
 
 urlpatterns = [
@@ -61,4 +62,6 @@ urlpatterns = [
     path('pairwise_comparisons/<int:pairwise_comparison_pk>', PairwiseComparisonDetail.as_view()),
 
     path('projects/<int:project_pk>/upload/', FileUpload.as_view()),
+
+    path('projects/<int:project_pk>/export_csv/', CsvExport.as_view()),
 ]

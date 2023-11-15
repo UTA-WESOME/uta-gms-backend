@@ -1,4 +1,5 @@
 import _io
+import csv
 import datetime
 import re
 from builtins import Exception
@@ -13,6 +14,7 @@ from rest_framework import generics
 from rest_framework import status
 from rest_framework.exceptions import AuthenticationFailed, ValidationError
 from rest_framework.response import Response
+from django.http import HttpResponse
 from rest_framework.views import APIView
 from utagmsengine.parser import Parser
 from utagmsengine.solver import Solver
@@ -907,3 +909,37 @@ class FileUpload(APIView):
                     if performance_serializer.is_valid():
                         performance_serializer.save(alternative=alternative)
             return Response({'message': 'Files uploaded successfully'})
+
+
+class CsvExport(APIView):
+    # permission_classes = [IsOwnerOfProject]
+
+    def get(self, request, *args, **kwargs):
+        project_id = self.kwargs.get("project_pk")
+        response = HttpResponse(content_type='text/csv')
+        print(project_id)
+
+        writer = csv.writer(response, delimiter=';')
+
+        alternatives = Alternative.objects.filter(project=project_id)
+        criteria = Criterion.objects.filter(project=project_id)
+
+        first_row = ['']
+        second_row = ['']
+        for criterion in criteria:
+            first_row.append('gain' if criterion.gain else 'cost')
+            second_row.append(criterion.name)
+        writer.writerow(first_row)
+        writer.writerow(second_row)
+
+        for alternative in alternatives:
+            row = [alternative.name]
+            for criterion in criteria:
+                performance = Performance.objects.filter(alternative=alternative, criterion=criterion).first()
+                print(alternative.name, criterion.name, performance.value)
+                row.append(performance.value)
+            writer.writerow(row)
+
+        response['Content-Disposition'] = 'attachment; filename="data.csv"'
+        print(response)
+        return response
