@@ -917,7 +917,6 @@ class CsvExport(APIView):
     def get(self, request, *args, **kwargs):
         project_id = self.kwargs.get("project_pk")
         response = HttpResponse(content_type='text/csv')
-        print(project_id)
 
         writer = csv.writer(response, delimiter=';')
 
@@ -929,17 +928,18 @@ class CsvExport(APIView):
         for criterion in criteria:
             first_row.append('gain' if criterion.gain else 'cost')
             second_row.append(criterion.name)
-        writer.writerow(first_row)
-        writer.writerow(second_row)
+
+        if first_row != ['']:
+            writer.writerow(first_row)
+        if second_row != ['']:
+            writer.writerow(second_row)
 
         for alternative in alternatives:
             row = [alternative.name]
             for criterion in criteria:
                 performance = Performance.objects.filter(alternative=alternative, criterion=criterion).first()
-                print(alternative.name, criterion.name, performance.value)
                 row.append(performance.value)
             writer.writerow(row)
 
         response['Content-Disposition'] = 'attachment; filename="data.csv"'
-        print(response)
         return response
