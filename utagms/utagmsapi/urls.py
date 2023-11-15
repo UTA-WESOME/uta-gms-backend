@@ -56,7 +56,7 @@ urlpatterns = [
     path('alternatives/<int:alternative_pk>/performances/', PerformanceList.as_view()),
     path('performances/<int:performance_pk>', PerformanceDetail.as_view()),
 
-    path('categories/<int:category_pk>/preference_intensities/', PreferenceIntensityList.as_view()),
+    path('projects/<int:project_pk>/preference_intensities/', PreferenceIntensityList.as_view()),
     path('preference_intensities/<int:preference_intensity_pk>', PreferenceIntensityDetail.as_view()),
 
     path('categories/<int:category_pk>/pairwise_comparisons/', PairwiseComparisonList.as_view()),

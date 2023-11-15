@@ -191,7 +191,7 @@ class IsOwnerOfPreferenceIntensity(permissions.BasePermission):
             return False
         preference_intensity = PreferenceIntensity.objects.filter(id=preference_intensity_pk).first()
 
-        return preference_intensity.category.project.user == user
+        return preference_intensity.project.user == user
 
 
 class IsOwnerOfPairwiseComparison(permissions.BasePermission):

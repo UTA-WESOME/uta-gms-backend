@@ -231,6 +231,7 @@ class ProjectBatch(APIView):
         criteria_data = data.get("criteria", [])
         alternatives_data = data.get("alternatives", [])
         categories_data = data.get("categories", [])
+        preference_intensities_data = data.get("preference_intensities", [])
 
         # Criteria
         # if there are criteria that were not in the payload, we delete them
@@ -260,13 +261,12 @@ class ProjectBatch(APIView):
                         if performance_data.get('criterion', -1) == criterion_id:
                             performance_data['criterion'] = criterion.id
 
-                for category_data in categories_data:
-                    # update criterion id in preference_intensities
-                    pref_intensities_data = category_data.get('preference_intensities', [])
-                    for pref_intensity_data in pref_intensities_data:
-                        if pref_intensity_data.get('criterion', -1) == criterion_id:
-                            pref_intensity_data['criterion'] = criterion.id
+                # update criterion id in preference_intensities
+                for pref_intensity_data in preference_intensities_data:
+                    if pref_intensity_data.get('criterion', -1) == criterion_id:
+                        pref_intensity_data['criterion'] = criterion.id
 
+                for category_data in categories_data:
                     # update criterion id in criterion_categories
                     criterion_categories_data = category_data.get('criterion_categories', [])
                     for criterion_category_data in criterion_categories_data:
@@ -296,6 +296,15 @@ class ProjectBatch(APIView):
 
                 # Performances
                 performances_data = alternative_data.get('performances', [])
+
+                # it may happen that the user had an alternative with id=1, deleted it and added a new one with id=1
+                # and the performances were not deleted in cascade, so we need to delete them manually because the new
+                # ones do not have an id in the payload, and they would raise a ValidationError in the serializer
+                performances_ids_db = alternative.performances.values_list('id', flat=True)
+                performances_ids_request = [performance_data.get('id', -1) for performance_data in performances_data]
+                performances_ids_to_delete = set(performances_ids_db) - set(performances_ids_request)
+                alternative.performances.filter(id__in=performances_ids_to_delete).delete()
+
                 for performance_data in performances_data:
                     performance_id = performance_data.get('id')
 
@@ -308,20 +317,19 @@ class ProjectBatch(APIView):
                     if performance_serializer.is_valid():
                         performance_serializer.save(alternative=alternative)
 
-                for category_data in categories_data:
-                    # update alternatives id in preference intensities
-                    pref_intensities_data = category_data.get('preference_intensities', [])
-                    for pref_intensity_data in pref_intensities_data:
-                        for alternative_number in range(1, 5):
-                            if pref_intensity_data.get(f'alternative_{alternative_number}', -1) == alternative_id:
-                                pref_intensity_data[f'alternative_{alternative_number}'] = alternative.id
+                # update alternatives id in preference intensities
+                for pref_intensity_data in preference_intensities_data:
+                    for alternative_number in range(1, 5):
+                        if pref_intensity_data.get(f'alternative_{alternative_number}', -1) == alternative_id:
+                            pref_intensity_data[f'alternative_{alternative_number}'] = alternative.id
 
+                for category_data in categories_data:
                     # update alternative id in pairwise comparisons
                     pairwise_comparisons_data = category_data.get('pairwise_comparisons', [])
                     for pairwise_comparison_data in pairwise_comparisons_data:
-                        if pairwise_comparisons_data.get('alternative_1', -1) == alternative_id:
+                        if pairwise_comparison_data.get('alternative_1', -1) == alternative_id:
                             pairwise_comparison_data['alternative_1'] = alternative.id
-                        if pairwise_comparisons_data.get('alternative_2', -1) == alternative_id:
+                        if pairwise_comparison_data.get('alternative_2', -1) == alternative_id:
                             pairwise_comparison_data['alternative_2'] = alternative.id
 
                     # update alternative id in ranking
@@ -369,36 +377,14 @@ class ProjectBatch(APIView):
                     if cc_serializer.is_valid():
                         cc_serializer.save(category=category)
 
-                # Preference Intensities
-                pref_intensities_data = category_data.get('preference_intensities', [])
-
-                pref_intensities_ids_db = category.preference_intensities.values_list('id', flat=True)
-                pref_intensities_ids_request = [pref_intensity_data.get('id')
-                                                for pref_intensity_data in pref_intensities_data]
-                pref_intensities_ids_to_delete = set(pref_intensities_ids_db) - set(pref_intensities_ids_request)
-                category.preference_intensities.filter(id__in=pref_intensities_ids_to_delete).delete()
-
-                for pref_intensity_data in pref_intensities_data:
-                    pref_intensity_id = pref_intensity_data.get('id')
-                    try:
-                        pref_intensity = category.preference_intensities.get(id=pref_intensity_id)
-                        pref_intensity_serializer = PreferenceIntensitySerializer(pref_intensity,
-                                                                                  data=pref_intensity_data)
-                    except PreferenceIntensity.DoesNotExist:
-                        pref_intensity_serializer = PreferenceIntensitySerializer(data=pref_intensity_data)
-                    if pref_intensity_serializer.is_valid():
-                        pref_intensity_serializer.save(category=category)
-
                 # Pairwise Comparisons
                 pairwise_comparisons_data = category_data.get('pairwise_comparisons', [])
-
                 pairwise_comparisons_ids_db = category.pairwise_comparisons.values_list('id', flat=True)
                 pairwise_comparisons_ids_request = [pc_data.get('id') for pc_data in pairwise_comparisons_data]
                 pairwise_comparisons_ids_to_delete = (
                         set(pairwise_comparisons_ids_db) - set(pairwise_comparisons_ids_request)
                 )
                 category.pairwise_comparisons.filter(id__in=pairwise_comparisons_ids_to_delete).delete()
-
                 for pairwise_comparison_data in pairwise_comparisons_data:
                     pairwise_comparison_id = pairwise_comparison_data.get('id')
                     try:
@@ -412,12 +398,10 @@ class ProjectBatch(APIView):
 
                 # Rankings
                 rankings_data = category_data.get('rankings', [])
-
                 rankings_ids_db = category.rankings.values_list('id', flat=True)
                 rankings_ids_request = [ranking_data.get('id') for ranking_data in rankings_data]
                 rankings_ids_to_delete = set(rankings_ids_db) - set(rankings_ids_request)
                 category.rankings.filter(id__in=rankings_ids_to_delete).delete()
-
                 for ranking_data in rankings_data:
                     ranking_id = ranking_data.get('id')
                     try:
@@ -428,10 +412,33 @@ class ProjectBatch(APIView):
                     if ranking_serializer.is_valid():
                         ranking_serializer.save(category=category)
 
+                # update criterion id in preference_intensities
+                for pref_intensity_data in preference_intensities_data:
+                    if pref_intensity_data.get('category', -1) == category_id:
+                        pref_intensity_data['category'] = category.id
+
         # reset the hasse_graphs
         for category in Category.objects.filter(project=project):
             category.hasse_graph = {}
             category.save()
+
+        # Preference Intensities
+        pref_intensities_ids_db = project.preference_intensities.values_list('id', flat=True)
+        pref_intensities_ids_request = [pref_intensity_data.get('id')
+                                        for pref_intensity_data in preference_intensities_data]
+        pref_intensities_ids_to_delete = set(pref_intensities_ids_db) - set(pref_intensities_ids_request)
+        project.preference_intensities.filter(id__in=pref_intensities_ids_to_delete).delete()
+
+        for pref_intensity_data in preference_intensities_data:
+            pref_intensity_id = pref_intensity_data.get('id')
+            try:
+                pref_intensity = project.preference_intensities.get(id=pref_intensity_id)
+                pref_intensity_serializer = PreferenceIntensitySerializer(pref_intensity,
+                                                                          data=pref_intensity_data)
+            except PreferenceIntensity.DoesNotExist:
+                pref_intensity_serializer = PreferenceIntensitySerializer(data=pref_intensity_data)
+            if pref_intensity_serializer.is_valid():
+                pref_intensity_serializer.save(project=project)
 
         project_serializer = ProjectSerializerWhole(project)
         return Response(project_serializer.data)
@@ -715,18 +722,18 @@ class PerformanceDetail(generics.RetrieveUpdateDestroyAPIView):
 
 # PreferenceIntensity
 class PreferenceIntensityList(generics.ListCreateAPIView):
-    permission_classes = [IsOwnerOfCategory]
+    permission_classes = [IsOwnerOfProject]
     serializer_class = PreferenceIntensitySerializer
 
     def get_queryset(self):
-        category_id = self.kwargs.get("category_pk")
-        preference_intensities = PreferenceIntensity.objects.filter(category=category_id)
+        project_id = self.kwargs.get("project_pk")
+        preference_intensities = PreferenceIntensity.objects.filter(project=project_id)
         return preference_intensities
 
     def perform_create(self, serializer):
-        category_id = self.kwargs.get('category_pk')
-        category = Category.objects.filter(id=category_id).first()
-        serializer.save(category=category)
+        project_id = self.kwargs.get('project_pk')
+        project = Project.objects.filter(id=project_id).first()
+        serializer.save(project=project)
 
 
 class PreferenceIntensityDetail(generics.RetrieveUpdateDestroyAPIView):

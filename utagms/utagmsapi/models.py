@@ -38,9 +38,6 @@ class Category(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    class Meta:
-        ordering = ("name",)
-
 
 class Criterion(models.Model):
     name = models.CharField(max_length=64, help_text="Criterion name")
@@ -121,11 +118,9 @@ class PreferenceIntensity(models.Model):
     alternative_4 = models.ForeignKey(Alternative, on_delete=models.CASCADE, related_name="preference_intensities_4")
     criterion = models.ForeignKey(Criterion, on_delete=models.CASCADE, null=True, related_name="preference_intensities")
     category = models.ForeignKey(Category, on_delete=models.CASCADE, null=True, related_name="preference_intensities")
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="preference_intensities")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ("category", "criterion",)
 
 
 class PairwiseComparison(models.Model):
