@@ -38,6 +38,9 @@ class Category(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        ordering = ("id",)
+
 
 class Criterion(models.Model):
     name = models.CharField(max_length=64, help_text="Criterion name")
@@ -48,7 +51,7 @@ class Criterion(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ("name",)
+        ordering = ("id",)
 
 
 class CriterionCategory(models.Model):
@@ -68,7 +71,7 @@ class Alternative(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ("name",)
+        ordering = ("id",)
 
 
 class Ranking(models.Model):
@@ -122,6 +125,9 @@ class PreferenceIntensity(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        ordering = ("id",)
+
 
 class PairwiseComparison(models.Model):
     PREFERENCE = 'preference'
@@ -139,6 +145,9 @@ class PairwiseComparison(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        ordering = ("id",)
+
 
 class Percentage(models.Model):
     position = models.IntegerField(help_text="Position of the percentage")
@@ -148,6 +157,9 @@ class Percentage(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        ordering = ("id",)
+
 
 class AcceptabilityIndex(models.Model):
     percentage = models.FloatField(help_text="In how many percent of cases is alternative_1 better than alternative_2?")
@@ -156,3 +168,6 @@ class AcceptabilityIndex(models.Model):
     alternative_2 = models.ForeignKey(Alternative, on_delete=models.CASCADE, related_name="acceptability_indices_2")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("id",)
