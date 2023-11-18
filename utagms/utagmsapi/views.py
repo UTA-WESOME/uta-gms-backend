@@ -912,7 +912,7 @@ class FileUpload(APIView):
 
 
 class CsvExport(APIView):
-    # permission_classes = [IsOwnerOfProject]
+    permission_classes = [IsOwnerOfProject]
 
     def get(self, request, *args, **kwargs):
         project_id = self.kwargs.get("project_pk")
