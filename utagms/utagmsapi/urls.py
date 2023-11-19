@@ -15,7 +15,6 @@ from .views import (
     LogoutView,
     RefreshView,
     ProjectBatch,
-    ProjectResults,
     PreferenceIntensityList,
     PreferenceIntensityDetail,
     FileUpload,
@@ -23,6 +22,7 @@ from .views import (
     PairwiseComparisonDetail,
     CategoryList,
     CategoryDetail,
+    CategoryResults,
     CriterionCategoryList,
     CriterionCategoryDetail,
     RankingList,
@@ -38,11 +38,11 @@ urlpatterns = [
 
     path('projects/', ProjectList.as_view()),
     path('projects/<int:project_pk>', ProjectDetail.as_view()),
-    path('projects/<int:project_pk>/batch', ProjectBatch.as_view()),
-    path('projects/<int:project_pk>/results', ProjectResults.as_view()),
+    path('projects/<int:project_pk>/batch/', ProjectBatch.as_view()),
 
     path('projects/<int:project_pk>/categories/', CategoryList.as_view()),
     path('categories/<int:category_pk>', CategoryDetail.as_view()),
+    path('categories/<int:category_pk>/results/', CategoryResults.as_view()),
 
     path('projects/<int:project_pk>/criteria/', CriterionList.as_view()),
     path('criteria/<int:criterion_pk>', CriterionDetail.as_view()),

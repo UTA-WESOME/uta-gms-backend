@@ -7,7 +7,6 @@ import utagmsengine.dataclasses as uged
 from django.conf import settings
 from django.contrib.auth.hashers import check_password
 from django.db import transaction
-from django.db.models import Count, Q
 from rest_framework import generics
 from rest_framework import status
 from rest_framework.exceptions import AuthenticationFailed, ValidationError
@@ -57,6 +56,7 @@ from .serializers import (
     CriterionCategorySerializer,
     RankingSerializer
 )
+from .utils.recursive_queries import RecursiveQueries
 
 
 # User
@@ -217,6 +217,7 @@ class ProjectBatch(APIView):
         project_serializer = ProjectSerializerWhole(project)
         return Response(project_serializer.data)
 
+    @transaction.atomic
     def patch(self, request, *args, **kwargs):
         data = request.data
         project_id = kwargs.get("project_pk")
@@ -444,115 +445,130 @@ class ProjectBatch(APIView):
         return Response(project_serializer.data)
 
 
-class ProjectResults(APIView):
-    permission_classes = [IsOwnerOfProject]
+class CategoryResults(APIView):
+    permission_classes = [IsOwnerOfCategory]
 
+    @transaction.atomic
     def post(self, request, *args, **kwargs):
-        project_id = kwargs.get('project_pk')
-        project = Project.objects.filter(id=project_id).first()
+        category_id = kwargs.get('category_pk')
+        category_root = Category.objects.get(id=category_id)
+        project = category_root.project
 
-        # get sum of the criteria weights
-        weights_sum = sum(Criterion.objects.filter(project=project).order_by('id').values_list('weight', flat=True))
+        # Get children of the category
+        categories = RecursiveQueries.get_categories_subtree(category_id)
+        criteria = RecursiveQueries.get_criteria_for_category(category_id)
 
-        # get criteria
+        # get uta-gms-engine criteria
         criteria_uged = [
             uged.Criterion(criterion_id=str(c.id), number_of_linear_segments=c.linear_segments, gain=c.gain)
-            for c in Criterion.objects.filter(project=project)
-            .annotate(active_category_count=Count('criterion_categories__category',
-                                                  filter=Q(criterion_categories__category__active=True)))
-            .annotate(criterion_categories_count=Count('criterion_categories'))
-            .filter(Q(active_category_count__gt=0) | Q(criterion_categories_count=0))
+            for c in criteria
         ]
-
-        # sanity check: we need at least one criterion
         if len(criteria_uged) == 0:
-            return Response({"details": "There are no active criteria! Please make at least one category active."},
-                            status=status.HTTP_400_BAD_REQUEST)
+            return Response({"details": "There are no active criteria!"}, status=status.HTTP_400_BAD_REQUEST)
 
         # get alternatives
         alternatives = Alternative.objects.filter(project=project)
 
         # get performance_table_list
-        # we need performances only from criteria that have at least one category marked as active or no categories
+        # we need performances only from criteria
         performances = {}
         for alternative in alternatives:
             performances[str(alternative.id)] = {
                 str(criterion_id): value for criterion_id, value in
                 Performance.objects
                 .filter(alternative=alternative)
-                .annotate(active_category_count=Count('criterion__criterion_categories__category',
-                                                      filter=Q(criterion__criterion_categories__category__active=True)))
-                .annotate(criterion_categories_count=Count('criterion__criterion_categories'))
-                .filter(Q(active_category_count__gt=0) | Q(criterion_categories_count=0))
+                .filter(criterion__in=criteria)
                 .values_list('criterion', 'value')
             }
 
         # get preferences and indifferences
         preferences_list = []
         indifferences_list = []
-        # we need to check if the project uses reference ranking or pairwise comparisons
         if project.pairwise_mode:
-            for pairwise_comparison in PairwiseComparison.objects.filter(project=project):
+            for pairwise_comparison in PairwiseComparison.objects.filter(category__in=categories):
+                # we have to find criteria that the pairwise comparison is related to
+                criteria_for_comparison = Criterion.objects.filter(
+                    id__in=RecursiveQueries.get_criteria_for_category(pairwise_comparison.category.id)
+                )
                 if pairwise_comparison.type == PairwiseComparison.PREFERENCE:
                     preferences_list.append(uged.Preference(
                         superior=str(pairwise_comparison.alternative_1.id),
-                        inferior=str(pairwise_comparison.alternative_2.id)
+                        inferior=str(pairwise_comparison.alternative_2.id),
+                        criteria=[str(criterion.id) for criterion in criteria_for_comparison]
                     ))
                 if pairwise_comparison.type == PairwiseComparison.INDIFFERENCE:
                     indifferences_list.append(uged.Indifference(
                         equal1=str(pairwise_comparison.alternative_1.id),
-                        equal2=str(pairwise_comparison.alternative_2.id)
+                        equal2=str(pairwise_comparison.alternative_2.id),
+                        criteria=[str(criterion.id) for criterion in criteria_for_comparison]
                     ))
         else:
-            # first, we get unique reference_ranking values and sort it
-            ref_ranking_unique_values = set(
-                Alternative.objects
-                .filter(project=project)
-                .values_list('reference_ranking', flat=True)
-            )
-            ref_ranking_unique_list_sorted = sorted(ref_ranking_unique_values)
-            # now we need to check every alternative and find other alternatives that are below this alternative in
-            # reference_ranking
-            for alternative_1 in alternatives:
+            for category in categories:
+                criteria_for_category = RecursiveQueries.get_criteria_for_category(category.id)
+                rankings = Ranking.objects.filter(category=category)
+                # we get unique ranking values and sort them
+                reference_ranking_unique_values = list(set(rankings.values_list('reference_ranking', flat=True)))
+                reference_ranking_unique_values.sort()
+                # now we need to check every alternative and find other alternatives that are below this alternative in
+                # reference_ranking
+                for ranking_1 in rankings:
 
-                # 0 in reference_ranking means that it was not placed in the reference ranking
-                if alternative_1.reference_ranking == 0:
-                    continue
+                    # 0 in reference_ranking means that it was not placed in the reference ranking
+                    if ranking_1.reference_ranking == 0:
+                        continue
 
-                # we have to get the index of the current alternative's reference ranking
-                ref_ranking_index = ref_ranking_unique_list_sorted.index(alternative_1.reference_ranking)
-                if ref_ranking_index < len(ref_ranking_unique_list_sorted) - 1:
-                    for alternative_2 in alternatives:
-
-                        if alternative_1.id == alternative_2.id:
+                    # we have to get the index in the reference_ranking_unique_values of the current ranking's
+                    # reference_ranking value
+                    rr_index = reference_ranking_unique_values.index(ranking_1.reference_ranking)
+                    for ranking_2 in rankings:
+                        if ranking_1.id == ranking_2.id:
                             continue
-
-                        if alternative_2.reference_ranking == ref_ranking_unique_list_sorted[ref_ranking_index + 1]:
+                        if (
+                                # we need to skip checking if the rr_index is the last one in the unique ranking,
+                                # otherwise we will out of bounds for the reference_ranking_unique_values list
+                                # when doing rr_index + 1
+                                rr_index < len(reference_ranking_unique_values) - 1
+                                and ranking_2.reference_ranking == reference_ranking_unique_values[rr_index + 1]
+                        ):
                             preferences_list.append(uged.Preference(
-                                superior=str(alternative_1.id), inferior=str(alternative_2.id)
+                                superior=str(ranking_1.alternative.id),
+                                inferior=str(ranking_2.alternative.id),
+                                criteria=[str(criterion.id) for criterion in criteria_for_category]
                             ))
-
-                        if alternative_2.reference_ranking == ref_ranking_unique_list_sorted[ref_ranking_index]:
+                        if ranking_2.reference_ranking == reference_ranking_unique_values[rr_index]:
                             indifferences_list.append(uged.Indifference(
-                                equal1=str(alternative_1.id), equal2=str(alternative_2.id)
+                                equal1=str(ranking_1.alternative.id),
+                                equal2=str(ranking_2.alternative.id),
+                                criteria=[str(criterion.id) for criterion in criteria_for_category]
                             ))
 
         # get best-worst positions
         best_worst_positions = []
-        alternatives_count = Alternative.objects.filter(project=project).count()
-        for alternative in Alternative.objects.filter(project=project):
-            if alternative.best_position is not None and alternative.worst_position is not None:
-                best_worst_positions.append(uged.Position(alternative_id=str(alternative.id),
-                                                          worst_position=alternative.worst_position,
-                                                          best_position=alternative.best_position))
-            elif alternative.best_position is not None:
-                best_worst_positions.append(uged.Position(alternative_id=str(alternative.id),
-                                                          worst_position=alternatives_count,
-                                                          best_position=alternative.best_position))
-            elif alternative.worst_position is not None:
-                best_worst_positions.append(uged.Position(alternative_id=str(alternative.id),
-                                                          worst_position=alternative.worst_position,
-                                                          best_position=1))
+        for category in categories:
+            rankings_count = Ranking.objects.filter(category=category).count()
+            criteria_for_category = RecursiveQueries.get_criteria_for_category(category.id)
+            for ranking in Ranking.objects.filter(category=category):
+                if ranking.best_position is not None and ranking.worst_position is not None:
+                    best_worst_positions.append(uged.Position(
+                        alternative_id=str(ranking.alternative.id),
+                        worst_position=ranking.worst_position,
+                        best_position=ranking.best_position,
+                        criteria=[str(criterion.id) for criterion in criteria_for_category]
+                    ))
+                elif ranking.best_position is not None:
+                    best_worst_positions.append(uged.Position(
+                        alternative_id=str(ranking.alternative.id),
+                        worst_position=rankings_count,
+                        best_position=ranking.best_position,
+                        criteria=[str(criterion.id) for criterion in criteria_for_category]
+                    ))
+                elif ranking.worst_position is not None:
+                    best_worst_positions.append(uged.Position(
+                        alternative_id=str(ranking.alternative.id),
+                        worst_position=ranking.worst_position,
+                        best_position=1,
+                        criteria=[str(criterion.id) for criterion in criteria_for_category]
+                    ))
 
         # RANKING
         solver = Solver()
@@ -568,26 +584,28 @@ class ProjectResults(APIView):
 
         print(samples)
 
-        # updating alternatives with ranking values
+        # updating rankings
         for i, (key, value) in enumerate(sorted(ranking.items(), key=lambda x: -x[1]), start=1):
-            alternative = Alternative.objects.filter(id=int(key)).first()
-            alternative.ranking = i
-            alternative.ranking_value = value
-            alternative.save()
+            ranking = Ranking.objects.filter(alternative_id=int(key)).filter(category=category_root).first()
+            ranking.ranking = i
+            ranking.ranking_value = value
+            ranking.save()
 
         # updating criterion functions
         for criterion_id, function in functions.items():
-            criterion = Criterion.objects.get(id=int(criterion_id))
-            criterion_function_points = FunctionPoint.objects.filter(criterion=criterion)
+            criterion_function_points = FunctionPoint.objects \
+                .filter(criterion_id=int(criterion_id)) \
+                .filter(category=category_root)
             criterion_function_points.delete()
 
             for x, y in function:
                 point = FunctionPointSerializer(data={
                     'ordinate': y,
                     'abscissa': x,
+                    'criterion': int(criterion_id)
                 })
                 if point.is_valid():
-                    point.save(criterion=criterion)
+                    point.save(category=category_root)
 
         # HASSE GRAPH
         hasse_graph = solver.get_hasse_diagram_dict(
@@ -597,14 +615,11 @@ class ProjectResults(APIView):
             criteria_uged,
             best_worst_positions
         )
-
-        # change data to integer ids and to list
         hasse_graph = {int(key): [int(value) for value in values] for key, values in hasse_graph.items()}
-        project.hasse_graph = hasse_graph
-        project.save()
+        category_root.hasse_graph = hasse_graph
+        category_root.save()
 
-        project_serializer = ProjectSerializerWhole(project)
-        return Response(project_serializer.data)
+        return Response({"details": "success"})
 
 
 # Category
