@@ -31,8 +31,8 @@ class Category(models.Model):
     name = models.CharField(max_length=64, help_text="Category name")
     color = models.CharField(max_length=15, help_text="Color of the category")
     active = models.BooleanField(default=True, help_text="Should the category be used in calculating results?")
-    diagram = models.JSONField(null=True,
-                               help_text="Graph that represents necessary relations between project's alternatives")
+    hasse_graph = models.JSONField(null=True,
+                                   help_text="Graph that represents necessary relations between project's alternatives")
     parent = models.ForeignKey("self", null=True, blank=True, on_delete=models.CASCADE, related_name="children")
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="categories")
     created_at = models.DateTimeField(auto_now_add=True)
