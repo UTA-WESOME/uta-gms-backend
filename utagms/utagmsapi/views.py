@@ -27,7 +27,8 @@ from .models import (
     PairwiseComparison,
     Category,
     CriterionCategory,
-    Ranking
+    Ranking,
+    Percentage
 )
 from .permissions import (
     IsOwnerOfProject,
@@ -54,7 +55,8 @@ from .serializers import (
     FunctionPointSerializer,
     CategorySerializer,
     CriterionCategorySerializer,
-    RankingSerializer
+    RankingSerializer,
+    PercentageSerializer
 )
 from .utils.recursive_queries import RecursiveQueries
 
@@ -579,8 +581,22 @@ class CategoryResults(APIView):
             criteria_uged,
             best_worst_positions,
             '/sampler/polyrun-1.1.0-jar-with-dependencies.jar',
-            '10'
+            '100'
         )
+
+        # updating percentages
+        for key, percentages_data in samples.items():
+            percentages = Percentage.objects.filter(alternative_id=int(key)).filter(category=category_root)
+            percentages.delete()
+
+            for i, value in enumerate(percentages_data):
+                percentage_serializer = PercentageSerializer(data={
+                    'position': i + 1,
+                    'percent': value,
+                    'alternative': int(key)
+                })
+                if percentage_serializer.is_valid():
+                    percentage_serializer.save(category=category_root)
 
         print(samples)
 
