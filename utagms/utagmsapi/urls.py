@@ -27,6 +27,7 @@ from .views import (
     CriterionCategoryDetail,
     RankingList,
     RankingDetail,
+    CsvExport,
 )
 
 urlpatterns = [
@@ -66,4 +67,5 @@ urlpatterns = [
     path('rankings/<int:ranking_pk>', RankingDetail.as_view()),
 
     path('projects/<int:project_pk>/upload/', FileUpload.as_view()),
+    path('projects/<int:project_pk>/export_csv/', CsvExport.as_view()),
 ]
