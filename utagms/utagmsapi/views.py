@@ -833,8 +833,10 @@ class FileUpload(APIView):
             # deleting previous data
             curr_alternatives = Alternative.objects.filter(project=project)
             curr_criteria = Criterion.objects.filter(project=project)
+            curr_categories = Category.objects.filter(project=project)
             curr_alternatives.delete()
             curr_criteria.delete()
+            curr_categories.delete()
 
             try:
                 parser = Parser()
@@ -884,6 +886,37 @@ class FileUpload(APIView):
                     performance_serializer = PerformanceSerializer(data=performance_data)
                     if performance_serializer.is_valid():
                         performance_serializer.save(alternative=alternative)
+
+            # categories
+            category = None
+            root_category_serializer = CategorySerializer(data={
+                'name': 'General',
+                'color': 'teal.500',
+                'active': True,
+                'hasse_diagram': {},
+                'parent': None
+            })
+            if root_category_serializer.is_valid():
+                category = root_category_serializer.save(project=project)
+
+            # rankings
+            for alternative in Alternative.objects.filter(project=project):
+                ranking_serializer = RankingSerializer(data={
+                    'reference_ranking': 0,
+                    'ranking': 0,
+                    'ranking_value': 0,
+                    'alternative': alternative.id
+                })
+                if ranking_serializer.is_valid():
+                    ranking_serializer.save(category=category)
+
+            # criterion to category
+            for criterion in Criterion.objects.filter(project=project):
+                cc_serializer = CriterionCategorySerializer(data={
+                    'criterion': criterion.id
+                })
+                if cc_serializer.is_valid():
+                    cc_serializer.save(category=category)
 
             return Response({'message': 'File uploaded successfully'})
 
