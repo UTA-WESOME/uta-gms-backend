@@ -598,7 +598,7 @@ class CategoryResults(APIView):
                 if percentage_serializer.is_valid():
                     percentage_serializer.save(category=category_root)
 
-        print(samples)
+        # print(samples)
 
         # updating rankings
         for i, (key, value) in enumerate(sorted(ranking.items(), key=lambda x: -x[1]), start=1):
