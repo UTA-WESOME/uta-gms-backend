@@ -9,9 +9,12 @@ from utagmsapi.models import (
     Alternative,
     PreferenceIntensity,
     PairwiseComparison,
-    CriterionFunctionPoint,
+    FunctionPoint,
     CriterionCategory,
-    Category
+    Category,
+    Ranking,
+    Percentage,
+    AcceptabilityIndex
 )
 
 
@@ -36,7 +39,7 @@ class ProjectSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.Project
         exclude = ['user']
-        optional_fields = ['description', 'hasse_graph']
+        optional_fields = ['description']
 
 
 class ProjectSerializerWhole(serializers.ModelSerializer):
@@ -44,15 +47,14 @@ class ProjectSerializerWhole(serializers.ModelSerializer):
     categories = serializers.SerializerMethodField()
     alternatives = serializers.SerializerMethodField()
     preference_intensities = serializers.SerializerMethodField()
-    pairwise_comparisons = serializers.SerializerMethodField()
 
     def get_criteria(self, obj):
         criteria = Criterion.objects.filter(project=obj)
-        return CriterionSerializerWhole(criteria, many=True).data
+        return CriterionSerializer(criteria, many=True).data
 
     def get_categories(self, obj):
         categories = Category.objects.filter(project=obj)
-        return CategorySerializer(categories, many=True).data
+        return CategorySerializerWhole(categories, many=True).data
 
     def get_alternatives(self, obj):
         alternatives = Alternative.objects.filter(project=obj)
@@ -61,10 +63,6 @@ class ProjectSerializerWhole(serializers.ModelSerializer):
     def get_preference_intensities(self, obj):
         preference_intensities = PreferenceIntensity.objects.filter(project=obj)
         return PreferenceIntensitySerializer(preference_intensities, many=True).data
-
-    def get_pairwise_comparisons(self, obj):
-        pairwise_comparisons = PairwiseComparison.objects.filter(project=obj)
-        return PairwiseComparisonSerializer(pairwise_comparisons, many=True).data
 
     class Meta:
         model = models.Project
@@ -83,6 +81,43 @@ class CategorySerializer(serializers.ModelSerializer):
         exclude = ['project']
 
 
+class CategorySerializerWhole(serializers.ModelSerializer):
+    criterion_categories = serializers.SerializerMethodField()
+    function_points = serializers.SerializerMethodField()
+    pairwise_comparisons = serializers.SerializerMethodField()
+    rankings = serializers.SerializerMethodField()
+    percentages = serializers.SerializerMethodField()
+    acceptability_indices = serializers.SerializerMethodField()
+
+    def get_criterion_categories(self, obj):
+        criterion_categories = CriterionCategory.objects.filter(category=obj)
+        return CriterionCategorySerializer(criterion_categories, many=True).data
+
+    def get_function_points(self, obj):
+        function_points = FunctionPoint.objects.filter(category=obj)
+        return FunctionPointSerializer(function_points, many=True).data
+
+    def get_pairwise_comparisons(self, obj):
+        pairwise_comparisons = PairwiseComparison.objects.filter(category=obj)
+        return PairwiseComparisonSerializer(pairwise_comparisons, many=True).data
+
+    def get_rankings(self, obj):
+        rankings = Ranking.objects.filter(category=obj)
+        return RankingSerializer(rankings, many=True).data
+
+    def get_percentages(self, obj):
+        percentages = Percentage.objects.filter(category=obj)
+        return PercentageSerializer(percentages, many=True).data
+
+    def get_acceptability_indices(self, obj):
+        acceptability_indices = AcceptabilityIndex.objects.filter(category=obj)
+        return AcceptabilityIndexSerializer(acceptability_indices, many=True).data
+
+    class Meta:
+        model = models.Category
+        fields = '__all__'
+
+
 class CriterionSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.Criterion
@@ -92,21 +127,21 @@ class CriterionSerializer(serializers.ModelSerializer):
 class CriterionCategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = models.CriterionCategory
-        exclude = ['criterion']
+        exclude = ['category']
 
     def save(self, **kwargs):
-        criterion = kwargs.get('criterion')
-        if criterion:
+        category = kwargs.get('category')
+        if category:
 
-            category = self.validated_data.get('category')
+            criterion = self.validated_data.get('criterion')
             if criterion.project != category.project:
                 raise ValidationError({"details": "criterion and category do not belong to the same project"})
 
-        super().save(criterion=criterion)
+        super().save(category=category)
 
     def create(self, validated_data):
-        criterion = validated_data.get('criterion')
         category = validated_data.get('category')
+        criterion = validated_data.get('criterion')
         criterion_category = CriterionCategory.objects.filter(criterion=criterion).filter(category=category).first()
         if criterion_category:
             raise ValidationError({"details": "criterion_category already exists"})
@@ -120,23 +155,6 @@ class CriterionCategorySerializer(serializers.ModelSerializer):
             raise ValidationError({"details": "criterion_category already exists"})
 
         return super().update(instance, validated_data)
-
-
-class CriterionSerializerWhole(serializers.ModelSerializer):
-    criterion_function_points = serializers.SerializerMethodField()
-    criterion_categories = serializers.SerializerMethodField()
-
-    def get_criterion_function_points(self, obj):
-        criterion_function_points = CriterionFunctionPoint.objects.filter(criterion=obj)
-        return CriterionFunctionPointSerializer(criterion_function_points, many=True).data
-
-    def get_criterion_categories(self, obj):
-        criterion_categories = CriterionCategory.objects.filter(criterion=obj)
-        return CriterionCategorySerializer(criterion_categories, many=True).data
-
-    class Meta:
-        model = models.Criterion
-        fields = '__all__'
 
 
 class AlternativeSerializer(serializers.ModelSerializer):
@@ -194,10 +212,10 @@ class PerformanceSerializerUpdate(serializers.ModelSerializer):
         }
 
 
-class CriterionFunctionPointSerializer(serializers.ModelSerializer):
+class FunctionPointSerializer(serializers.ModelSerializer):
     class Meta:
-        model = models.CriterionFunctionPoint
-        exclude = ['criterion']
+        model = models.FunctionPoint
+        exclude = ['category']
 
 
 class PreferenceIntensitySerializer(serializers.ModelSerializer):
@@ -207,22 +225,27 @@ class PreferenceIntensitySerializer(serializers.ModelSerializer):
 
     def save(self, **kwargs):
 
-        # we need to check if all four alternatives and criterion belong to the same project as specified in the URL
+        # we need to check if all four alternatives and category/criterion
+        # belong to the same project as specified in the URL
         project = kwargs.get('project')
         if project:
             # Get four alternatives
             alternatives = [self.validated_data.get(f'alternative_{_id}') for _id in range(1, 5)]
             # Get criterion
             criterion = self.validated_data.get('criterion')
+            # Get category
+            category = self.validated_data.get('category')
 
-            alternatives_invalid = any(
-                [True if alternative.project != project else False for alternative in alternatives])
-            if alternatives_invalid or (criterion and criterion.project != project):
-                raise ValidationError(
-                    {
-                        "details": "The alternatives and criterion must belong to the same project as preference intensity."
-                    }
-                )
+            alternatives_invalid = any([True if alternative.project != project else False
+                                        for alternative in alternatives])
+            if (
+                    alternatives_invalid
+                    or (criterion and criterion.project != project)
+                    or (category and category.project != project)
+            ):
+                raise ValidationError({
+                    "details": "The alternatives and criterion must belong to the same project as preference intensity."
+                })
 
         super().save(**kwargs)
 
@@ -230,18 +253,46 @@ class PreferenceIntensitySerializer(serializers.ModelSerializer):
 class PairwiseComparisonSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.PairwiseComparison
-        exclude = ['project']
+        exclude = ['category']
 
     def save(self, **kwargs):
         # checking if alternatives belong to the same project
-        project = kwargs.get('project')
-        if project:
+        category = kwargs.get('category')
+        if category:
             alternative_1 = self.validated_data.get('alternative_1')
             alternative_2 = self.validated_data.get('alternative_2')
-            if alternative_1.project != alternative_2.project or alternative_1.project != project:
-                raise ValidationError(
-                    {
-                        "details": "The alternatives must belong to the same project as pairwise comparison."
-                    }
-                )
+            if alternative_1.project != alternative_2.project or alternative_1.project != category.project:
+                raise ValidationError({
+                    "details": "The alternatives must belong to the same project as pairwise comparison."
+                })
         super().save(**kwargs)
+
+
+class RankingSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.Ranking
+        exclude = ['category']
+
+    def save(self, **kwargs):
+        # checking if alternative and category belong to the same project
+        category = kwargs.get('category')
+        if category:
+            alternative = self.validated_data.get('alternative')
+            if category.project != alternative.project:
+                raise ValidationError({
+                    "details": "The alternative and category must belong to the same project."
+                })
+
+        super().save(**kwargs)
+
+
+class PercentageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.Percentage
+        exclude = ['category']
+
+
+class AcceptabilityIndexSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.AcceptabilityIndex
+        exclude = ['category']
