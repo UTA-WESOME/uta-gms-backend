@@ -28,6 +28,7 @@ from .views import (
     RankingList,
     RankingDetail,
     CsvExport,
+    XmlExport,
 )
 
 urlpatterns = [
@@ -68,4 +69,5 @@ urlpatterns = [
 
     path('projects/<int:project_pk>/upload/', FileUpload.as_view()),
     path('projects/<int:project_pk>/export_csv/', CsvExport.as_view()),
+    path('projects/<int:project_pk>/export_xml/', XmlExport.as_view()),
 ]

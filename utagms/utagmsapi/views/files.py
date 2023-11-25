@@ -1,7 +1,10 @@
 import _io
+from io import BytesIO
 import csv
 import re
 from builtins import Exception
+import zipfile
+from lxml import etree
 
 from django.db import transaction
 from django.http import HttpResponse
@@ -315,4 +318,68 @@ class CsvExport(APIView):
             writer.writerow(row)
 
         response['Content-Disposition'] = 'attachment; filename="data.csv"'
+        return response
+
+
+class XmlExport(APIView):
+    permission_classes = [IsOwnerOfProject]
+
+    def get(self, request, *args, **kwargs):
+        project_id = self.kwargs.get("project_pk")
+        xml_files = ["criteria.xml", "alternatives.xml", "performance_table.xml"]
+        xml_trees = []
+
+        # criteria.xml
+        root = etree.Element("xmcda", xmlns="http://www.decision-deck.org/2021/XMCDA-4.0.0")
+        criteria = Criterion.objects.filter(project=project_id)
+        criteria_element = etree.SubElement(root, "criteria")
+        for criterion in criteria:
+            criterion_element = etree.SubElement(criteria_element, "criterion", id=str(criterion.id),
+                                                 name=criterion.name)
+            active = etree.SubElement(criterion_element, "active")
+            active.text = "true"
+        xml_trees.append(etree.ElementTree(root))
+
+        # alternatives.xml
+        root = etree.Element("xmcda", xmlns="http://www.decision-deck.org/2021/XMCDA-4.0.0")
+        alternatives = Alternative.objects.filter(project=project_id)
+        alternatives_element = etree.SubElement(root, "alternatives")
+        for alternative in alternatives:
+            alternative_element = etree.SubElement(alternatives_element, "alternative", id=str(alternative.id),
+                                                   name=alternative.name)
+            type_ = etree.SubElement(alternative_element, "type")
+            type_.text = "real"
+            active = etree.SubElement(alternative_element, "active")
+            active.text = "true"
+        xml_trees.append(etree.ElementTree(root))
+
+        # performanceTable.xml
+        root = etree.Element("xmcda", xmlns="http://www.decision-deck.org/2021/XMCDA-4.0.0")
+        performances_element = etree.SubElement(root, "performanceTable", mcdaConcept="REAL")
+
+        for alternative in alternatives:
+            alternative_performances_element = etree.SubElement(performances_element, "alternativePerformances")
+            alternative_id_element = etree.SubElement(alternative_performances_element, "alternativeID")
+            alternative_id_element.text = str(alternative.id)
+            for criterion in criteria:
+                performance = Performance.objects.filter(alternative=alternative, criterion=criterion).first()
+                performance_element = etree.SubElement(alternative_performances_element, "performance")
+                criterion_id_element = etree.SubElement(performance_element, "criterionID")
+                criterion_id_element.text = str(criterion.id)
+
+                values_element = etree.SubElement(performance_element, "values")
+                value_element = etree.SubElement(values_element, "value")
+                real_element = etree.SubElement(value_element, "real")
+                real_element.text = str(performance.value)
+        xml_trees.append(etree.ElementTree(root))
+
+        zip_buffer = BytesIO()
+        with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
+            for name, tree in zip(xml_files, xml_trees):
+                xml_content = etree.tostring(tree, pretty_print=True, xml_declaration=True, encoding="UTF-8")
+                zip_file.writestr(name, xml_content)
+
+        response = HttpResponse(zip_buffer.getvalue(), content_type="application/zip")
+        response["Content-Disposition"] = 'attachment; filename="data.zip"'
+
         return response
