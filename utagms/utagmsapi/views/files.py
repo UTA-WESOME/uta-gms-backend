@@ -335,7 +335,8 @@ class XmlExport(APIView):
 
     def get(self, request, *args, **kwargs):
         project_id = self.kwargs.get("project_pk")
-        xml_files = ["criteria.xml", "criteria_scales.xml", "alternatives.xml", "performance_table.xml"]
+        xml_files = ["criteria.xml", "criteria_scales.xml", "criteria_segments.xml",
+                     "alternatives.xml", "performance_table.xml"]
         xml_trees = []
 
         # criteria.xml
@@ -362,6 +363,20 @@ class XmlExport(APIView):
             quantitative_element = etree.SubElement(scale_element, "quantitative")
             preference_direction_element = etree.SubElement(quantitative_element, "preferenceDirection")
             preference_direction_element.text = "max" if criterion.gain else "min"
+        xml_trees.append(etree.ElementTree(root))
+
+        # criteria_segments.xml
+        root = etree.Element("xmcda", xmlns="http://www.decision-deck.org/2021/XMCDA-4.0.0")
+        criteria_values_element = etree.SubElement(root, "criteriaValues")
+        for criterion in criteria:
+            criterion_values_element = etree.SubElement(criteria_values_element, "criterionValues")
+            criterion_id_element = etree.SubElement(criterion_values_element, "criterionID")
+            criterion_id_element.text = str(criterion.id)
+
+            values_element = etree.SubElement(criterion_values_element, "values")
+            value_element = etree.SubElement(values_element, "value")
+            integer_element = etree.SubElement(value_element, "integer")
+            integer_element.text = str(criterion.linear_segments)
         xml_trees.append(etree.ElementTree(root))
 
         # alternatives.xml
