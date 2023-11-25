@@ -149,11 +149,20 @@ class FileUpload(APIView):
 
                 _ = uploaded_file_text.readline()
                 second_line = uploaded_file_text.readline()
+                third_line = uploaded_file_text.readline()
+                print(second_line)
+                print(third_line)
 
-                match = re.search(r"<([^>\s]+)", second_line)
-                if match:
+                match_second = re.search(r"<([^>\s]+)", second_line)
+                match_third = re.search(r"<([^>\s]+)", third_line)
+                if match_second and "xmcda" not in second_line:
                     uploaded_file_text.seek(0)
-                    ordered_files_dict[match.group(1)] = uploaded_file_text
+                    ordered_files_dict[match_second.group(1)] = uploaded_file_text
+                if match_third:
+                    uploaded_file_text.seek(0)
+                    ordered_files_dict[match_third.group(1)] = uploaded_file_text
+
+        print(ordered_files_dict.items())
 
         # make sure we don't import wrong combination of files
         if "criteria" not in ordered_files_dict or (
