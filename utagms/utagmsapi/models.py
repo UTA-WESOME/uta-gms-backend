@@ -171,3 +171,25 @@ class AcceptabilityIndex(models.Model):
 
     class Meta:
         ordering = ("id",)
+
+
+class Inconsistency(models.Model):
+    PREFERENCE = 'preference'
+    INDIFFERENCE = 'indifference'
+    POSITION = 'position'
+    INTENSITY = 'intensity'
+
+    TYPE_CHOICES = [
+        (PREFERENCE, 'Preference'),
+        (INDIFFERENCE, 'Indifference'),
+        (POSITION, 'Position'),
+        (INTENSITY, 'Intensity')
+    ]
+    group = models.IntegerField(help_text="Group of the inconsistency. Inconsistencies that belong to the same group"
+                                          " should be deleted to make the problem consistent")
+    data = models.TextField(help_text="Data of the inconsistency")
+    type = models.CharField(choices=TYPE_CHOICES)
+    category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name="inconsistencies")
+
+    class Meta:
+        ordering = ("category", "group", "id",)

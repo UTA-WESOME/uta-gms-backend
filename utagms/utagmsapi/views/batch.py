@@ -3,7 +3,7 @@ from django.db import transaction
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from utagmsengine.solver import Solver, Inconsistency
+from utagmsengine.solver import Solver, Inconsistency as InconsistencyException
 
 from ..models import (
     Project,
@@ -16,7 +16,8 @@ from ..models import (
     Category,
     CriterionCategory,
     Ranking,
-    Percentage
+    Percentage,
+    Inconsistency
 )
 from ..permissions import (
     IsOwnerOfProject,
@@ -34,7 +35,8 @@ from ..serializers import (
     CategorySerializer,
     CriterionCategorySerializer,
     RankingSerializer,
-    PercentageSerializer
+    PercentageSerializer,
+    InconsistencySerializer
 )
 from ..utils.recursive_queries import RecursiveQueries
 
@@ -244,6 +246,10 @@ class ProjectBatch(APIView):
                     if ranking_serializer.is_valid():
                         ranking_serializer.save(category=category)
 
+                # delete inconsistencies
+                inconsistencies = Inconsistency.objects.filter(category=category)
+                inconsistencies.delete()
+
                 # update criterion id in preference_intensities
                 for pref_intensity_data in preference_intensities_data:
                     if pref_intensity_data.get('category', -1) == category_id:
@@ -393,7 +399,8 @@ class CategoryResults(APIView):
                         alternative_id_2=str(preference_intensity.alternative_2.id),
                         alternative_id_3=str(preference_intensity.alternative_3.id),
                         alternative_id_4=str(preference_intensity.alternative_4.id),
-                        criteria=[str(criterion.id) for criterion in criteria_for_intensity]
+                        criteria=[str(criterion.id) for criterion in criteria_for_intensity],
+                        sign='>'
                     )
                 )
 
@@ -405,7 +412,8 @@ class CategoryResults(APIView):
                         alternative_id_2=str(preference_intensity.alternative_2.id),
                         alternative_id_3=str(preference_intensity.alternative_3.id),
                         alternative_id_4=str(preference_intensity.alternative_4.id),
-                        criteria=[str(preference_intensity.criterion.id)]
+                        criteria=[str(preference_intensity.criterion.id)],
+                        sign='>'
                     )
                 )
 
@@ -437,6 +445,10 @@ class CategoryResults(APIView):
                         criteria=[str(criterion.id) for criterion in criteria_for_category]
                     ))
 
+        # delete previous inconsistencies if any
+        inconsistencies = Inconsistency.objects.filter(category=category_root)
+        inconsistencies.delete()
+
         # RANKING
         solver = Solver()
         try:
@@ -450,8 +462,69 @@ class CategoryResults(APIView):
                 sampler_path='/sampler/polyrun-1.1.0-jar-with-dependencies.jar',
                 number_of_samples='100'
             )
-        except Inconsistency as e:
-            print(e.data)
+        except InconsistencyException as e:
+            inconsistencies = e.data
+            for i, inconsistencies_group in enumerate(inconsistencies, start=1):
+                i_preferences, i_indifferences, i_best_worst, i_intensities = inconsistencies_group
+
+                for preference in i_preferences:
+                    # get names of the alternatives
+                    name_1 = Alternative.objects.get(id=int(preference.superior)).name
+                    name_2 = Alternative.objects.get(id=int(preference.inferior)).name
+                    criteria_names = Criterion.objects.filter(
+                        id__in=[int(_id) for _id in preference.criteria]
+                    ).values_list('name', flat=True)
+                    i_serializer = InconsistencySerializer(data={
+                        'group': i,
+                        'data': f"{name_1} > {name_2} on {', '.join(criteria_names)}",
+                        'type': Inconsistency.PREFERENCE
+                    })
+                    if i_serializer.is_valid():
+                        i_serializer.save(category=category_root)
+
+                for indifference in i_indifferences:
+                    # get names of the alternatives
+                    name_1 = Alternative.objects.get(id=int(indifference.equal1)).name
+                    name_2 = Alternative.objects.get(id=int(indifference.equal2)).name
+                    criteria_names = Criterion.objects.filter(
+                        id__in=[int(_id) for _id in indifference.criteria]
+                    ).values_list('name', flat=True)
+                    i_serializer = InconsistencySerializer(data={
+                        'group': i,
+                        'data': f"{name_1} = {name_2} on {', '.join(criteria_names)}",
+                        'type': Inconsistency.INDIFFERENCE
+                    })
+                    if i_serializer.is_valid():
+                        i_serializer.save(category=category_root)
+
+                for best_worst in i_best_worst:
+                    name = Alternative.objects.get(id=int(best_worst.alternative_id)).name
+                    criteria_names = Criterion.objects.filter(
+                        id__in=[int(_id) for _id in best_worst.criteria]
+                    ).values_list('name', flat=True)
+                    i_serializer = InconsistencySerializer(data={
+                        'group': i,
+                        'data': f"{name} - best position {best_worst.best_position}, worst position {best_worst.worst_position} on {', '.join(criteria_names)}",
+                        'type': Inconsistency.POSITION
+                    })
+                    if i_serializer.is_valid():
+                        i_serializer.save(category=category_root)
+
+                for intensity in i_intensities:
+                    name_1 = Alternative.objects.get(id=int(intensity.alternative_id_1)).name
+                    name_2 = Alternative.objects.get(id=int(intensity.alternative_id_2)).name
+                    name_3 = Alternative.objects.get(id=int(intensity.alternative_id_3)).name
+                    name_4 = Alternative.objects.get(id=int(intensity.alternative_id_4)).name
+                    criteria_names = Criterion.objects.filter(
+                        id__in=[int(_id) for _id in intensity.criteria]
+                    ).values_list('name', flat=True)
+                    i_serializer = InconsistencySerializer(data={
+                        'group': i,
+                        'data': f"{name_1} - {name_2} > {name_3} - {name_4} on {', '.join(criteria_names)}",
+                        'type': Inconsistency.INTENSITY
+                    })
+                    if i_serializer.is_valid():
+                        i_serializer.save(category=category_root)
         else:
 
             # updating percentages

@@ -14,7 +14,8 @@ from utagmsapi.models import (
     Category,
     Ranking,
     Percentage,
-    AcceptabilityIndex
+    AcceptabilityIndex,
+    Inconsistency
 )
 
 
@@ -88,6 +89,7 @@ class CategorySerializerWhole(serializers.ModelSerializer):
     rankings = serializers.SerializerMethodField()
     percentages = serializers.SerializerMethodField()
     acceptability_indices = serializers.SerializerMethodField()
+    inconsistencies = serializers.SerializerMethodField()
 
     def get_criterion_categories(self, obj):
         criterion_categories = CriterionCategory.objects.filter(category=obj)
@@ -112,6 +114,10 @@ class CategorySerializerWhole(serializers.ModelSerializer):
     def get_acceptability_indices(self, obj):
         acceptability_indices = AcceptabilityIndex.objects.filter(category=obj)
         return AcceptabilityIndexSerializer(acceptability_indices, many=True).data
+
+    def get_inconsistencies(self, obj):
+        inconsistencies = Inconsistency.objects.filter(category=obj)
+        return InconsistencySerializer(inconsistencies, many=True).data
 
     class Meta:
         model = models.Category
@@ -295,4 +301,10 @@ class PercentageSerializer(serializers.ModelSerializer):
 class AcceptabilityIndexSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.AcceptabilityIndex
+        exclude = ['category']
+
+
+class InconsistencySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.Inconsistency
         exclude = ['category']
