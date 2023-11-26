@@ -322,17 +322,21 @@ class CategoryResults(APIView):
                     id__in=RecursiveQueries.get_criteria_for_category(pairwise_comparison.category.id)
                 )
                 if pairwise_comparison.type == PairwiseComparison.PREFERENCE:
-                    preferences_list.append(uged.Preference(
-                        superior=str(pairwise_comparison.alternative_1.id),
-                        inferior=str(pairwise_comparison.alternative_2.id),
-                        criteria=[str(criterion.id) for criterion in criteria_for_comparison]
-                    ))
+                    preferences_list.append(
+                        uged.Preference(
+                            superior=str(pairwise_comparison.alternative_1.id),
+                            inferior=str(pairwise_comparison.alternative_2.id),
+                            criteria=[str(criterion.id) for criterion in criteria_for_comparison]
+                        )
+                    )
                 if pairwise_comparison.type == PairwiseComparison.INDIFFERENCE:
-                    indifferences_list.append(uged.Indifference(
-                        equal1=str(pairwise_comparison.alternative_1.id),
-                        equal2=str(pairwise_comparison.alternative_2.id),
-                        criteria=[str(criterion.id) for criterion in criteria_for_comparison]
-                    ))
+                    indifferences_list.append(
+                        uged.Indifference(
+                            equal1=str(pairwise_comparison.alternative_1.id),
+                            equal2=str(pairwise_comparison.alternative_2.id),
+                            criteria=[str(criterion.id) for criterion in criteria_for_comparison]
+                        )
+                    )
         else:
             for category in categories:
                 criteria_for_category = RecursiveQueries.get_criteria_for_category(category.id)
@@ -373,28 +377,60 @@ class CategoryResults(APIView):
                                 criteria=[str(criterion.id) for criterion in criteria_for_category]
                             ))
 
+        preferences_intensities_list = []
+        # get preference intensities
+        for preference_intensity in PreferenceIntensity.objects.filter(project=project):
+
+            # intensity defined on the whole category
+            if preference_intensity.category in categories:
+                # get criteria for this category
+                criteria_for_intensity = Criterion.objects.filter(
+                    id__in=RecursiveQueries.get_criteria_for_category(preference_intensity.category.id)
+                )
+                preferences_intensities_list.append(
+                    uged.Intensity(
+                        alternative_id_1=str(preference_intensity.alternative_1.id),
+                        alternative_id_2=str(preference_intensity.alternative_2.id),
+                        alternative_id_3=str(preference_intensity.alternative_3.id),
+                        alternative_id_4=str(preference_intensity.alternative_4.id),
+                        criteria=[str(criterion.id) for criterion in criteria_for_intensity]
+                    )
+                )
+
+            # intensity defined on a criterion
+            if preference_intensity.criterion in criteria:
+                preferences_intensities_list.append(
+                    uged.Intensity(
+                        alternative_id_1=str(preference_intensity.alternative_1.id),
+                        alternative_id_2=str(preference_intensity.alternative_2.id),
+                        alternative_id_3=str(preference_intensity.alternative_3.id),
+                        alternative_id_4=str(preference_intensity.alternative_4.id),
+                        criteria=[str(preference_intensity.criterion.id)]
+                    )
+                )
+
         # get best-worst positions
-        best_worst_positions = []
+        best_worst_positions_list = []
         for category in categories:
             rankings_count = Ranking.objects.filter(category=category).count()
             criteria_for_category = RecursiveQueries.get_criteria_for_category(category.id)
             for ranking in Ranking.objects.filter(category=category):
                 if ranking.best_position is not None and ranking.worst_position is not None:
-                    best_worst_positions.append(uged.Position(
+                    best_worst_positions_list.append(uged.Position(
                         alternative_id=str(ranking.alternative.id),
                         worst_position=ranking.worst_position,
                         best_position=ranking.best_position,
                         criteria=[str(criterion.id) for criterion in criteria_for_category]
                     ))
                 elif ranking.best_position is not None:
-                    best_worst_positions.append(uged.Position(
+                    best_worst_positions_list.append(uged.Position(
                         alternative_id=str(ranking.alternative.id),
                         worst_position=rankings_count,
                         best_position=ranking.best_position,
                         criteria=[str(criterion.id) for criterion in criteria_for_category]
                     ))
                 elif ranking.worst_position is not None:
-                    best_worst_positions.append(uged.Position(
+                    best_worst_positions_list.append(uged.Position(
                         alternative_id=str(ranking.alternative.id),
                         worst_position=ranking.worst_position,
                         best_position=1,
@@ -404,13 +440,14 @@ class CategoryResults(APIView):
         # RANKING
         solver = Solver()
         ranking, functions, samples = solver.get_representative_value_function_dict(
-            performances,
-            preferences_list,
-            indifferences_list,
-            criteria_uged,
-            best_worst_positions,
-            '/sampler/polyrun-1.1.0-jar-with-dependencies.jar',
-            '100'
+            performance_table_dict=performances,
+            preferences=preferences_list,
+            indifferences=indifferences_list,
+            criteria=criteria_uged,
+            positions=best_worst_positions_list,
+            intensities=[],
+            sampler_path='/sampler/polyrun-1.1.0-jar-with-dependencies.jar',
+            number_of_samples='100'
         )
 
         # updating percentages
@@ -458,7 +495,7 @@ class CategoryResults(APIView):
             preferences_list,
             indifferences_list,
             criteria_uged,
-            best_worst_positions
+            best_worst_positions_list
         )
         hasse_graph = {int(key): [int(value) for value in values] for key, values in hasse_graph.items()}
         category_root.hasse_graph = hasse_graph
