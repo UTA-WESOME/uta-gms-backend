@@ -3,7 +3,7 @@ from django.db import transaction
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from utagmsengine.solver import Solver
+from utagmsengine.solver import Solver, Inconsistency as InconsistencyException
 
 from ..models import (
     Project,
@@ -16,7 +16,8 @@ from ..models import (
     Category,
     CriterionCategory,
     Ranking,
-    Percentage
+    Percentage,
+    Inconsistency
 )
 from ..permissions import (
     IsOwnerOfProject,
@@ -34,7 +35,8 @@ from ..serializers import (
     CategorySerializer,
     CriterionCategorySerializer,
     RankingSerializer,
-    PercentageSerializer
+    PercentageSerializer,
+    InconsistencySerializer
 )
 from ..utils.recursive_queries import RecursiveQueries
 
@@ -244,6 +246,10 @@ class ProjectBatch(APIView):
                     if ranking_serializer.is_valid():
                         ranking_serializer.save(category=category)
 
+                # delete inconsistencies
+                inconsistencies = Inconsistency.objects.filter(category=category)
+                inconsistencies.delete()
+
                 # update criterion id in preference_intensities
                 for pref_intensity_data in preference_intensities_data:
                     if pref_intensity_data.get('category', -1) == category_id:
@@ -322,17 +328,21 @@ class CategoryResults(APIView):
                     id__in=RecursiveQueries.get_criteria_for_category(pairwise_comparison.category.id)
                 )
                 if pairwise_comparison.type == PairwiseComparison.PREFERENCE:
-                    preferences_list.append(uged.Preference(
-                        superior=str(pairwise_comparison.alternative_1.id),
-                        inferior=str(pairwise_comparison.alternative_2.id),
-                        criteria=[str(criterion.id) for criterion in criteria_for_comparison]
-                    ))
+                    preferences_list.append(
+                        uged.Preference(
+                            superior=str(pairwise_comparison.alternative_1.id),
+                            inferior=str(pairwise_comparison.alternative_2.id),
+                            criteria=[str(criterion.id) for criterion in criteria_for_comparison]
+                        )
+                    )
                 if pairwise_comparison.type == PairwiseComparison.INDIFFERENCE:
-                    indifferences_list.append(uged.Indifference(
-                        equal1=str(pairwise_comparison.alternative_1.id),
-                        equal2=str(pairwise_comparison.alternative_2.id),
-                        criteria=[str(criterion.id) for criterion in criteria_for_comparison]
-                    ))
+                    indifferences_list.append(
+                        uged.Indifference(
+                            equal1=str(pairwise_comparison.alternative_1.id),
+                            equal2=str(pairwise_comparison.alternative_2.id),
+                            criteria=[str(criterion.id) for criterion in criteria_for_comparison]
+                        )
+                    )
         else:
             for category in categories:
                 criteria_for_category = RecursiveQueries.get_criteria_for_category(category.id)
@@ -373,95 +383,197 @@ class CategoryResults(APIView):
                                 criteria=[str(criterion.id) for criterion in criteria_for_category]
                             ))
 
+        preference_intensities_list = []
+        # get preference intensities
+        for preference_intensity in PreferenceIntensity.objects.filter(project=project):
+
+            # intensity defined on the whole category
+            if preference_intensity.category in categories:
+                # get criteria for this category
+                criteria_for_intensity = Criterion.objects.filter(
+                    id__in=RecursiveQueries.get_criteria_for_category(preference_intensity.category.id)
+                )
+                preference_intensities_list.append(
+                    uged.Intensity(
+                        alternative_id_1=str(preference_intensity.alternative_1.id),
+                        alternative_id_2=str(preference_intensity.alternative_2.id),
+                        alternative_id_3=str(preference_intensity.alternative_3.id),
+                        alternative_id_4=str(preference_intensity.alternative_4.id),
+                        criteria=[str(criterion.id) for criterion in criteria_for_intensity],
+                        sign='>'
+                    )
+                )
+
+            # intensity defined on a criterion
+            if preference_intensity.criterion in criteria:
+                preference_intensities_list.append(
+                    uged.Intensity(
+                        alternative_id_1=str(preference_intensity.alternative_1.id),
+                        alternative_id_2=str(preference_intensity.alternative_2.id),
+                        alternative_id_3=str(preference_intensity.alternative_3.id),
+                        alternative_id_4=str(preference_intensity.alternative_4.id),
+                        criteria=[str(preference_intensity.criterion.id)],
+                        sign='>'
+                    )
+                )
+
         # get best-worst positions
-        best_worst_positions = []
+        best_worst_positions_list = []
         for category in categories:
             rankings_count = Ranking.objects.filter(category=category).count()
             criteria_for_category = RecursiveQueries.get_criteria_for_category(category.id)
             for ranking in Ranking.objects.filter(category=category):
                 if ranking.best_position is not None and ranking.worst_position is not None:
-                    best_worst_positions.append(uged.Position(
+                    best_worst_positions_list.append(uged.Position(
                         alternative_id=str(ranking.alternative.id),
                         worst_position=ranking.worst_position,
                         best_position=ranking.best_position,
                         criteria=[str(criterion.id) for criterion in criteria_for_category]
                     ))
                 elif ranking.best_position is not None:
-                    best_worst_positions.append(uged.Position(
+                    best_worst_positions_list.append(uged.Position(
                         alternative_id=str(ranking.alternative.id),
                         worst_position=rankings_count,
                         best_position=ranking.best_position,
                         criteria=[str(criterion.id) for criterion in criteria_for_category]
                     ))
                 elif ranking.worst_position is not None:
-                    best_worst_positions.append(uged.Position(
+                    best_worst_positions_list.append(uged.Position(
                         alternative_id=str(ranking.alternative.id),
                         worst_position=ranking.worst_position,
                         best_position=1,
                         criteria=[str(criterion.id) for criterion in criteria_for_category]
                     ))
 
+        # delete previous inconsistencies if any
+        inconsistencies = Inconsistency.objects.filter(category=category_root)
+        inconsistencies.delete()
+
         # RANKING
         solver = Solver()
-        ranking, functions, samples = solver.get_representative_value_function_dict(
-            performances,
-            preferences_list,
-            indifferences_list,
-            criteria_uged,
-            best_worst_positions,
-            '/sampler/polyrun-1.1.0-jar-with-dependencies.jar',
-            '100'
-        )
+        try:
+            ranking, functions, samples = solver.get_representative_value_function_dict(
+                performance_table_dict=performances,
+                preferences=preferences_list,
+                indifferences=indifferences_list,
+                criteria=criteria_uged,
+                positions=best_worst_positions_list,
+                intensities=preference_intensities_list,
+                sampler_path='/sampler/polyrun-1.1.0-jar-with-dependencies.jar',
+                number_of_samples='100'
+            )
+        except InconsistencyException as e:
+            inconsistencies = e.data
+            for i, inconsistencies_group in enumerate(inconsistencies, start=1):
+                i_preferences, i_indifferences, i_best_worst, i_intensities = inconsistencies_group
 
-        # updating percentages
-        for key, percentages_data in samples.items():
-            percentages = Percentage.objects.filter(alternative_id=int(key)).filter(category=category_root)
-            percentages.delete()
+                for preference in i_preferences:
+                    # get names of the alternatives
+                    name_1 = Alternative.objects.get(id=int(preference.superior)).name
+                    name_2 = Alternative.objects.get(id=int(preference.inferior)).name
+                    criteria_names = Criterion.objects.filter(
+                        id__in=[int(_id) for _id in preference.criteria]
+                    ).values_list('name', flat=True)
+                    i_serializer = InconsistencySerializer(data={
+                        'group': i,
+                        'data': f"{name_1} > {name_2} on {', '.join(criteria_names)}",
+                        'type': Inconsistency.PREFERENCE
+                    })
+                    if i_serializer.is_valid():
+                        i_serializer.save(category=category_root)
 
-            for i, value in enumerate(percentages_data):
-                percentage_serializer = PercentageSerializer(data={
-                    'position': i + 1,
-                    'percent': value,
-                    'alternative': int(key)
-                })
-                if percentage_serializer.is_valid():
-                    percentage_serializer.save(category=category_root)
+                for indifference in i_indifferences:
+                    # get names of the alternatives
+                    name_1 = Alternative.objects.get(id=int(indifference.equal1)).name
+                    name_2 = Alternative.objects.get(id=int(indifference.equal2)).name
+                    criteria_names = Criterion.objects.filter(
+                        id__in=[int(_id) for _id in indifference.criteria]
+                    ).values_list('name', flat=True)
+                    i_serializer = InconsistencySerializer(data={
+                        'group': i,
+                        'data': f"{name_1} = {name_2} on {', '.join(criteria_names)}",
+                        'type': Inconsistency.INDIFFERENCE
+                    })
+                    if i_serializer.is_valid():
+                        i_serializer.save(category=category_root)
 
-        # print(samples)
+                for best_worst in i_best_worst:
+                    name = Alternative.objects.get(id=int(best_worst.alternative_id)).name
+                    criteria_names = Criterion.objects.filter(
+                        id__in=[int(_id) for _id in best_worst.criteria]
+                    ).values_list('name', flat=True)
+                    i_serializer = InconsistencySerializer(data={
+                        'group': i,
+                        'data': f"{name} - best position {best_worst.best_position}, worst position {best_worst.worst_position} on {', '.join(criteria_names)}",
+                        'type': Inconsistency.POSITION
+                    })
+                    if i_serializer.is_valid():
+                        i_serializer.save(category=category_root)
 
-        # updating rankings
-        for i, (key, value) in enumerate(sorted(ranking.items(), key=lambda x: -x[1]), start=1):
-            ranking = Ranking.objects.filter(alternative_id=int(key)).filter(category=category_root).first()
-            ranking.ranking = i
-            ranking.ranking_value = value
-            ranking.save()
+                for intensity in i_intensities:
+                    name_1 = Alternative.objects.get(id=int(intensity.alternative_id_1)).name
+                    name_2 = Alternative.objects.get(id=int(intensity.alternative_id_2)).name
+                    name_3 = Alternative.objects.get(id=int(intensity.alternative_id_3)).name
+                    name_4 = Alternative.objects.get(id=int(intensity.alternative_id_4)).name
+                    criteria_names = Criterion.objects.filter(
+                        id__in=[int(_id) for _id in intensity.criteria]
+                    ).values_list('name', flat=True)
+                    i_serializer = InconsistencySerializer(data={
+                        'group': i,
+                        'data': f"{name_1} - {name_2} > {name_3} - {name_4} on {', '.join(criteria_names)}",
+                        'type': Inconsistency.INTENSITY
+                    })
+                    if i_serializer.is_valid():
+                        i_serializer.save(category=category_root)
+        else:
 
-        # updating criterion functions
-        for criterion_id, function in functions.items():
-            criterion_function_points = FunctionPoint.objects \
-                .filter(criterion_id=int(criterion_id)) \
-                .filter(category=category_root)
-            criterion_function_points.delete()
+            # updating percentages
+            for key, percentages_data in samples.items():
+                percentages = Percentage.objects.filter(alternative_id=int(key)).filter(category=category_root)
+                percentages.delete()
 
-            for x, y in function:
-                point = FunctionPointSerializer(data={
-                    'ordinate': y,
-                    'abscissa': x,
-                    'criterion': int(criterion_id)
-                })
-                if point.is_valid():
-                    point.save(category=category_root)
+                for i, value in enumerate(percentages_data):
+                    percentage_serializer = PercentageSerializer(data={
+                        'position': i + 1,
+                        'percent': value,
+                        'alternative': int(key)
+                    })
+                    if percentage_serializer.is_valid():
+                        percentage_serializer.save(category=category_root)
 
-        # HASSE GRAPH
-        hasse_graph = solver.get_hasse_diagram_dict(
-            performances,
-            preferences_list,
-            indifferences_list,
-            criteria_uged,
-            best_worst_positions
-        )
-        hasse_graph = {int(key): [int(value) for value in values] for key, values in hasse_graph.items()}
-        category_root.hasse_graph = hasse_graph
-        category_root.save()
+            # updating rankings
+            for i, (key, value) in enumerate(sorted(ranking.items(), key=lambda x: -x[1]), start=1):
+                ranking = Ranking.objects.filter(alternative_id=int(key)).filter(category=category_root).first()
+                ranking.ranking = i
+                ranking.ranking_value = value
+                ranking.save()
+
+            # updating criterion functions
+            for criterion_id, function in functions.items():
+                criterion_function_points = FunctionPoint.objects \
+                    .filter(criterion_id=int(criterion_id)) \
+                    .filter(category=category_root)
+                criterion_function_points.delete()
+
+                for x, y in function:
+                    point = FunctionPointSerializer(data={
+                        'ordinate': y,
+                        'abscissa': x,
+                        'criterion': int(criterion_id)
+                    })
+                    if point.is_valid():
+                        point.save(category=category_root)
+
+            # HASSE GRAPH
+            hasse_graph = solver.get_hasse_diagram_dict(
+                performances,
+                preferences_list,
+                indifferences_list,
+                criteria_uged,
+                best_worst_positions_list
+            )
+            hasse_graph = {int(key): [int(value) for value in values] for key, values in hasse_graph.items()}
+            category_root.hasse_graph = hasse_graph
+            category_root.save()
 
         return Response({"details": "success"})
