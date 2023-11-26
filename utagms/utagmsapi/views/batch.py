@@ -3,7 +3,7 @@ from django.db import transaction
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from utagmsengine.solver import Solver
+from utagmsengine.solver import Solver, Inconsistency
 
 from ..models import (
     Project,
@@ -377,7 +377,7 @@ class CategoryResults(APIView):
                                 criteria=[str(criterion.id) for criterion in criteria_for_category]
                             ))
 
-        preferences_intensities_list = []
+        preference_intensities_list = []
         # get preference intensities
         for preference_intensity in PreferenceIntensity.objects.filter(project=project):
 
@@ -387,7 +387,7 @@ class CategoryResults(APIView):
                 criteria_for_intensity = Criterion.objects.filter(
                     id__in=RecursiveQueries.get_criteria_for_category(preference_intensity.category.id)
                 )
-                preferences_intensities_list.append(
+                preference_intensities_list.append(
                     uged.Intensity(
                         alternative_id_1=str(preference_intensity.alternative_1.id),
                         alternative_id_2=str(preference_intensity.alternative_2.id),
@@ -399,7 +399,7 @@ class CategoryResults(APIView):
 
             # intensity defined on a criterion
             if preference_intensity.criterion in criteria:
-                preferences_intensities_list.append(
+                preference_intensities_list.append(
                     uged.Intensity(
                         alternative_id_1=str(preference_intensity.alternative_1.id),
                         alternative_id_2=str(preference_intensity.alternative_2.id),
@@ -439,66 +439,68 @@ class CategoryResults(APIView):
 
         # RANKING
         solver = Solver()
-        ranking, functions, samples = solver.get_representative_value_function_dict(
-            performance_table_dict=performances,
-            preferences=preferences_list,
-            indifferences=indifferences_list,
-            criteria=criteria_uged,
-            positions=best_worst_positions_list,
-            intensities=[],
-            sampler_path='/sampler/polyrun-1.1.0-jar-with-dependencies.jar',
-            number_of_samples='100'
-        )
+        try:
+            ranking, functions, samples = solver.get_representative_value_function_dict(
+                performance_table_dict=performances,
+                preferences=preferences_list,
+                indifferences=indifferences_list,
+                criteria=criteria_uged,
+                positions=best_worst_positions_list,
+                intensities=preference_intensities_list,
+                sampler_path='/sampler/polyrun-1.1.0-jar-with-dependencies.jar',
+                number_of_samples='100'
+            )
+        except Inconsistency as e:
+            print(e.data)
+        else:
 
-        # updating percentages
-        for key, percentages_data in samples.items():
-            percentages = Percentage.objects.filter(alternative_id=int(key)).filter(category=category_root)
-            percentages.delete()
+            # updating percentages
+            for key, percentages_data in samples.items():
+                percentages = Percentage.objects.filter(alternative_id=int(key)).filter(category=category_root)
+                percentages.delete()
 
-            for i, value in enumerate(percentages_data):
-                percentage_serializer = PercentageSerializer(data={
-                    'position': i + 1,
-                    'percent': value,
-                    'alternative': int(key)
-                })
-                if percentage_serializer.is_valid():
-                    percentage_serializer.save(category=category_root)
+                for i, value in enumerate(percentages_data):
+                    percentage_serializer = PercentageSerializer(data={
+                        'position': i + 1,
+                        'percent': value,
+                        'alternative': int(key)
+                    })
+                    if percentage_serializer.is_valid():
+                        percentage_serializer.save(category=category_root)
 
-        # print(samples)
+            # updating rankings
+            for i, (key, value) in enumerate(sorted(ranking.items(), key=lambda x: -x[1]), start=1):
+                ranking = Ranking.objects.filter(alternative_id=int(key)).filter(category=category_root).first()
+                ranking.ranking = i
+                ranking.ranking_value = value
+                ranking.save()
 
-        # updating rankings
-        for i, (key, value) in enumerate(sorted(ranking.items(), key=lambda x: -x[1]), start=1):
-            ranking = Ranking.objects.filter(alternative_id=int(key)).filter(category=category_root).first()
-            ranking.ranking = i
-            ranking.ranking_value = value
-            ranking.save()
+            # updating criterion functions
+            for criterion_id, function in functions.items():
+                criterion_function_points = FunctionPoint.objects \
+                    .filter(criterion_id=int(criterion_id)) \
+                    .filter(category=category_root)
+                criterion_function_points.delete()
 
-        # updating criterion functions
-        for criterion_id, function in functions.items():
-            criterion_function_points = FunctionPoint.objects \
-                .filter(criterion_id=int(criterion_id)) \
-                .filter(category=category_root)
-            criterion_function_points.delete()
+                for x, y in function:
+                    point = FunctionPointSerializer(data={
+                        'ordinate': y,
+                        'abscissa': x,
+                        'criterion': int(criterion_id)
+                    })
+                    if point.is_valid():
+                        point.save(category=category_root)
 
-            for x, y in function:
-                point = FunctionPointSerializer(data={
-                    'ordinate': y,
-                    'abscissa': x,
-                    'criterion': int(criterion_id)
-                })
-                if point.is_valid():
-                    point.save(category=category_root)
-
-        # HASSE GRAPH
-        hasse_graph = solver.get_hasse_diagram_dict(
-            performances,
-            preferences_list,
-            indifferences_list,
-            criteria_uged,
-            best_worst_positions_list
-        )
-        hasse_graph = {int(key): [int(value) for value in values] for key, values in hasse_graph.items()}
-        category_root.hasse_graph = hasse_graph
-        category_root.save()
+            # HASSE GRAPH
+            hasse_graph = solver.get_hasse_diagram_dict(
+                performances,
+                preferences_list,
+                indifferences_list,
+                criteria_uged,
+                best_worst_positions_list
+            )
+            hasse_graph = {int(key): [int(value) for value in values] for key, values in hasse_graph.items()}
+            category_root.hasse_graph = hasse_graph
+            category_root.save()
 
         return Response({"details": "success"})
