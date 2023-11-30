@@ -204,15 +204,36 @@ class FileUpload(APIView):
                             status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
         for criterion in criterion_dict.items():
+            gain = criteria_scales_dict.get(criterion[0], 'max' if criterion[1].gain == 1 else 'min')
             criterion_data = {
                 'name': criterion[1].criterion_id,
-                'gain': 1 if criteria_scales_dict[criterion[0]] == 'max' else 0,
-                'linear_segments': criteria_segments_dict[criterion[0]],
+                'gain': 1 if gain == 'max' else 0,
+                'linear_segments': criteria_segments_dict.get(criterion[0], 0)
             }
 
             criterion_serializer = CriterionSerializer(data=criterion_data)
             if criterion_serializer.is_valid():
                 criterion_serializer.save(project=project)
+
+        # categories
+        category = None
+        root_category_serializer = CategorySerializer(data={
+            'name': 'General',
+            'color': 'teal.500',
+            'active': True,
+            'hasse_diagram': {},
+            'parent': None
+        })
+        if root_category_serializer.is_valid():
+            category = root_category_serializer.save(project=project)
+
+        # criterion to category
+        for criterion in Criterion.objects.filter(project=project):
+            cc_serializer = CriterionCategorySerializer(data={
+                'criterion': criterion.id
+            })
+            if cc_serializer.is_valid():
+                cc_serializer.save(category=category)
 
         # alternatives
         if "alternatives" not in ordered_files_dict:
@@ -237,6 +258,17 @@ class FileUpload(APIView):
             alternative_serializer = AlternativeSerializer(data=alternative_data)
             if alternative_serializer.is_valid():
                 alternative_serializer.save(project=project)
+
+        # rankings
+        for alternative in Alternative.objects.filter(project=project):
+            ranking_serializer = RankingSerializer(data={
+                'reference_ranking': 0,
+                'ranking': 0,
+                'ranking_value': 0,
+                'alternative': alternative.id
+            })
+            if ranking_serializer.is_valid():
+                ranking_serializer.save(category=category)
 
         # performance table
         if "performanceTable" in ordered_files_dict:
@@ -280,36 +312,6 @@ class FileUpload(APIView):
                     if performance_serializer.is_valid():
                         performance_serializer.save(alternative=alternative)
 
-        # categories
-        category = None
-        root_category_serializer = CategorySerializer(data={
-            'name': 'General',
-            'color': 'teal.500',
-            'active': True,
-            'hasse_diagram': {},
-            'parent': None
-        })
-        if root_category_serializer.is_valid():
-            category = root_category_serializer.save(project=project)
-
-        # rankings
-        for alternative in Alternative.objects.filter(project=project):
-            ranking_serializer = RankingSerializer(data={
-                'reference_ranking': 0,
-                'ranking': 0,
-                'ranking_value': 0,
-                'alternative': alternative.id
-            })
-            if ranking_serializer.is_valid():
-                ranking_serializer.save(category=category)
-
-        # criterion to category
-        for criterion in Criterion.objects.filter(project=project):
-            cc_serializer = CriterionCategorySerializer(data={
-                'criterion': criterion.id
-            })
-            if cc_serializer.is_valid():
-                cc_serializer.save(category=category)
 
         return Response({'message': 'Files uploaded successfully'})
 
