@@ -301,6 +301,9 @@ class CategoryResults(APIView):
             for c in criteria
         ]
         if len(criteria_uged) == 0:
+            for category in Category.objects.filter(project=project):
+                category.hasse_graph = {}
+                category.save()
             return Response({"details": "There are no active criteria!"}, status=status.HTTP_400_BAD_REQUEST)
 
         # get alternatives

@@ -13,6 +13,7 @@ class RecursiveQueries:
             SELECT c.id
             FROM utagmsapi_category c
             INNER JOIN category_tree ct ON c.parent_id = ct.id
+            WHERE c.active = TRUE
         )
         SELECT DISTINCT cat.id
         FROM utagmsapi_category cat
@@ -20,12 +21,13 @@ class RecursiveQueries:
     """
 
     __CRITERIA_QUERY = """
-            WITH RECURSIVE category_tree AS (
+        WITH RECURSIVE category_tree AS (
             SELECT id FROM utagmsapi_category WHERE id = %s
             UNION
             SELECT c.id
             FROM utagmsapi_category c
             INNER JOIN category_tree ct ON c.parent_id = ct.id
+            WHERE c.active = TRUE
         )
         SELECT DISTINCT c.id, c.name
         FROM utagmsapi_criterion c
