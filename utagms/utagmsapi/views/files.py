@@ -32,6 +32,8 @@ from ..serializers import (
     RankingSerializer
 )
 
+from ..utils.parser import Parser as BackendParser
+
 
 # FileUpload
 class FileUpload(APIView):
@@ -150,8 +152,6 @@ class FileUpload(APIView):
                 _ = uploaded_file_text.readline()
                 second_line = uploaded_file_text.readline()
                 third_line = uploaded_file_text.readline()
-                print(second_line)
-                print(third_line)
 
                 match_second = re.search(r"<([^>\s]+)", second_line)
                 match_third = re.search(r"<([^>\s]+)", third_line)
@@ -161,8 +161,6 @@ class FileUpload(APIView):
                 if match_third:
                     uploaded_file_text.seek(0)
                     ordered_files_dict[match_third.group(1)] = uploaded_file_text
-
-        print(ordered_files_dict.items())
 
         # make sure we don't import wrong combination of files
         if "criteria" not in ordered_files_dict or (
@@ -176,6 +174,17 @@ class FileUpload(APIView):
         curr_criteria.delete()
         curr_categories.delete()
 
+        # criteria scales
+        criteria_scales_dict = {}
+        print("Dictionary:", ordered_files_dict)
+        if "criteriaScales" in ordered_files_dict:
+            xml_file = ordered_files_dict["criteriaScales"]
+            try:
+                criteria_scales_dict = BackendParser.get_criterion_scales_dict_xmcda(xml_file)
+            except Exception as e:
+                return Response({'message': 'Incorrect file: {}'.format(str(e))},
+                                status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+
         # criteria
         xml_file = ordered_files_dict["criteria"]
         try:
@@ -188,7 +197,7 @@ class FileUpload(APIView):
         for criterion in criterion_dict.values():
             criterion_data = {
                 'name': criterion.criterion_id,
-                'gain': criterion.gain,
+                'gain': criteria_scales_dict.get(criterion.criterion_id, criterion.gain),
                 'linear_segments': 0,
             }
 
