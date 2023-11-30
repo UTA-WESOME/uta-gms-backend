@@ -176,11 +176,20 @@ class FileUpload(APIView):
 
         # criteria scales
         criteria_scales_dict = {}
-        print("Dictionary:", ordered_files_dict)
         if "criteriaScales" in ordered_files_dict:
             xml_file = ordered_files_dict["criteriaScales"]
             try:
                 criteria_scales_dict = BackendParser.get_criterion_scales_dict_xmcda(xml_file)
+            except Exception as e:
+                return Response({'message': 'Incorrect file: {}'.format(str(e))},
+                                status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+        # criteria segments
+        criteria_segments_dict = {}
+        if "criteriaValues" in ordered_files_dict:
+            xml_file = ordered_files_dict["criteriaValues"]
+            try:
+                criteria_segments_dict = BackendParser.get_criterion_segments_dict_xmcda(xml_file)
             except Exception as e:
                 return Response({'message': 'Incorrect file: {}'.format(str(e))},
                                 status=status.HTTP_422_UNPROCESSABLE_ENTITY)
@@ -194,11 +203,11 @@ class FileUpload(APIView):
             return Response({'message': 'Incorrect file: {}'.format(str(e))},
                             status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
-        for criterion in criterion_dict.values():
+        for criterion in criterion_dict.items():
             criterion_data = {
-                'name': criterion.criterion_id,
-                'gain': criteria_scales_dict.get(criterion.criterion_id, criterion.gain),
-                'linear_segments': 0,
+                'name': criterion[1].criterion_id,
+                'gain': 1 if criteria_scales_dict[criterion[0]] == 'max' else 0,
+                'linear_segments': criteria_segments_dict[criterion[0]],
             }
 
             criterion_serializer = CriterionSerializer(data=criterion_data)
