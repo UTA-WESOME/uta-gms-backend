@@ -32,6 +32,8 @@ from ..serializers import (
     RankingSerializer
 )
 
+from ..utils.parser import Parser as BackendParser
+
 
 # FileUpload
 class FileUpload(APIView):
@@ -68,7 +70,7 @@ class FileUpload(APIView):
                     uploaded_file_text.seek(0)
                     performance_table_list = parser.get_performance_table_dict_csv(uploaded_file_text)
                 except Exception as e:
-                    return Response({'message': 'Incorrect file: {}'.format(str(e))},
+                    return Response({'message': 'Incorrect file: {}'.format(uploaded_file.name)},
                                     status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
                 # criteria
@@ -150,8 +152,6 @@ class FileUpload(APIView):
                 _ = uploaded_file_text.readline()
                 second_line = uploaded_file_text.readline()
                 third_line = uploaded_file_text.readline()
-                print(second_line)
-                print(third_line)
 
                 match_second = re.search(r"<([^>\s]+)", second_line)
                 match_third = re.search(r"<([^>\s]+)", third_line)
@@ -161,8 +161,6 @@ class FileUpload(APIView):
                 if match_third:
                     uploaded_file_text.seek(0)
                     ordered_files_dict[match_third.group(1)] = uploaded_file_text
-
-        print(ordered_files_dict.items())
 
         # make sure we don't import wrong combination of files
         if "criteria" not in ordered_files_dict or (
@@ -176,25 +174,66 @@ class FileUpload(APIView):
         curr_criteria.delete()
         curr_categories.delete()
 
+        # criteria scales
+        criteria_scales_dict = {}
+        if "criteriaScales" in ordered_files_dict:
+            xml_file = ordered_files_dict["criteriaScales"]
+            try:
+                criteria_scales_dict = BackendParser.get_criterion_scales_dict_xmcda(xml_file)
+            except Exception as e:
+                return Response({'message': 'Incorrect file: {}'.format(xml_file.name)},
+                                status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+        # criteria segments
+        criteria_segments_dict = {}
+        if "criteriaValues" in ordered_files_dict:
+            xml_file = ordered_files_dict["criteriaValues"]
+            try:
+                criteria_segments_dict = BackendParser.get_criterion_segments_dict_xmcda(xml_file)
+            except Exception as e:
+                return Response({'message': 'Incorrect file: {}'.format(xml_file.name)},
+                                status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+
         # criteria
         xml_file = ordered_files_dict["criteria"]
         try:
             parser = Parser()
             criterion_dict = parser.get_criterion_dict_xmcda(xml_file)
         except Exception as e:
-            return Response({'message': 'Incorrect file: {}'.format(str(e))},
+            return Response({'message': 'Incorrect file: {}'.format(xml_file.name)},
                             status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
-        for criterion in criterion_dict.values():
+        for criterion in criterion_dict.items():
+            gain = criteria_scales_dict.get(criterion[0], 'max' if criterion[1].gain == 1 else 'min')
             criterion_data = {
-                'name': criterion.criterion_id,
-                'gain': criterion.gain,
-                'linear_segments': 0,
+                'name': criterion[1].criterion_id,
+                'gain': 1 if gain == 'max' else 0,
+                'linear_segments': criteria_segments_dict.get(criterion[0], 0)
             }
 
             criterion_serializer = CriterionSerializer(data=criterion_data)
             if criterion_serializer.is_valid():
                 criterion_serializer.save(project=project)
+
+        # categories
+        category = None
+        root_category_serializer = CategorySerializer(data={
+            'name': 'General',
+            'color': 'teal.500',
+            'active': True,
+            'hasse_diagram': {},
+            'parent': None
+        })
+        if root_category_serializer.is_valid():
+            category = root_category_serializer.save(project=project)
+
+        # criterion to category
+        for criterion in Criterion.objects.filter(project=project):
+            cc_serializer = CriterionCategorySerializer(data={
+                'criterion': criterion.id
+            })
+            if cc_serializer.is_valid():
+                cc_serializer.save(category=category)
 
         # alternatives
         if "alternatives" not in ordered_files_dict:
@@ -205,7 +244,7 @@ class FileUpload(APIView):
             parser = Parser()
             alternative_dict = parser.get_alternative_dict_xmcda(xml_file)
         except Exception as e:
-            return Response({'message': 'Incorrect file: {}'.format(str(e))},
+            return Response({'message': 'Incorrect file: {}'.format(xml_file.name)},
                             status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
         for alternative in alternative_dict.values():
@@ -220,6 +259,17 @@ class FileUpload(APIView):
             if alternative_serializer.is_valid():
                 alternative_serializer.save(project=project)
 
+        # rankings
+        for alternative in Alternative.objects.filter(project=project):
+            ranking_serializer = RankingSerializer(data={
+                'reference_ranking': 0,
+                'ranking': 0,
+                'ranking_value': 0,
+                'alternative': alternative.id
+            })
+            if ranking_serializer.is_valid():
+                ranking_serializer.save(category=category)
+
         # performance table
         if "performanceTable" in ordered_files_dict:
             xml_file = ordered_files_dict["performanceTable"]
@@ -227,7 +277,7 @@ class FileUpload(APIView):
                 parser = Parser()
                 performance_table_dict = parser.get_performance_table_dict_xmcda(xml_file)
             except Exception as e:
-                return Response({'message': 'Incorrect file: {}'.format(str(e))},
+                return Response({'message': 'Incorrect file: {}'.format(xml_file.name)},
                                 status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
             criteria = Criterion.objects.all().filter(project=project)
@@ -261,37 +311,6 @@ class FileUpload(APIView):
                     performance_serializer = PerformanceSerializer(data=performance_data)
                     if performance_serializer.is_valid():
                         performance_serializer.save(alternative=alternative)
-
-        # categories
-        category = None
-        root_category_serializer = CategorySerializer(data={
-            'name': 'General',
-            'color': 'teal.500',
-            'active': True,
-            'hasse_diagram': {},
-            'parent': None
-        })
-        if root_category_serializer.is_valid():
-            category = root_category_serializer.save(project=project)
-
-        # rankings
-        for alternative in Alternative.objects.filter(project=project):
-            ranking_serializer = RankingSerializer(data={
-                'reference_ranking': 0,
-                'ranking': 0,
-                'ranking_value': 0,
-                'alternative': alternative.id
-            })
-            if ranking_serializer.is_valid():
-                ranking_serializer.save(category=category)
-
-        # criterion to category
-        for criterion in Criterion.objects.filter(project=project):
-            cc_serializer = CriterionCategorySerializer(data={
-                'criterion': criterion.id
-            })
-            if cc_serializer.is_valid():
-                cc_serializer.save(category=category)
 
         return Response({'message': 'Files uploaded successfully'})
 
