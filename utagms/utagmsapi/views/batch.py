@@ -551,12 +551,10 @@ class CategoryResults(APIView):
                 ranking.ranking_value = value
                 ranking.save()
 
+            criterion_function_points = FunctionPoint.objects.filter(category=category_root)
+            criterion_function_points.delete()
             # updating criterion functions
             for criterion_id, function in functions.items():
-                criterion_function_points = FunctionPoint.objects \
-                    .filter(criterion_id=int(criterion_id)) \
-                    .filter(category=category_root)
-                criterion_function_points.delete()
 
                 for x, y in function:
                     point = FunctionPointSerializer(data={
