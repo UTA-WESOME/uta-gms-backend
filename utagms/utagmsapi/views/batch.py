@@ -319,30 +319,21 @@ class CategoryResults(APIView):
             }
 
         # get preferences and indifferences
-        preferences_list = []
-        indifferences_list = []
+        comparisons_list = []
         if project.pairwise_mode:
             for pairwise_comparison in PairwiseComparison.objects.filter(category__in=categories):
                 # we have to find criteria that the pairwise comparison is related to
                 criteria_for_comparison = Criterion.objects.filter(
                     id__in=RecursiveQueries.get_criteria_for_category(pairwise_comparison.category.id)
                 )
-                if pairwise_comparison.type == PairwiseComparison.PREFERENCE:
-                    preferences_list.append(
-                        uged.Preference(
-                            superior=str(pairwise_comparison.alternative_1.id),
-                            inferior=str(pairwise_comparison.alternative_2.id),
-                            criteria=[str(criterion.id) for criterion in criteria_for_comparison]
-                        )
+                comparisons_list.append(
+                    uged.Comparison(
+                        alternative_1=str(pairwise_comparison.alternative_1.id),
+                        alternative_2=str(pairwise_comparison.alternative_2.id),
+                        criteria=[str(criterion.id) for criterion in criteria_for_comparison],
+                        sign=pairwise_comparison.type
                     )
-                if pairwise_comparison.type == PairwiseComparison.INDIFFERENCE:
-                    indifferences_list.append(
-                        uged.Indifference(
-                            equal1=str(pairwise_comparison.alternative_1.id),
-                            equal2=str(pairwise_comparison.alternative_2.id),
-                            criteria=[str(criterion.id) for criterion in criteria_for_comparison]
-                        )
-                    )
+                )
         else:
             for category in categories:
                 criteria_for_category = RecursiveQueries.get_criteria_for_category(category.id)
@@ -371,16 +362,18 @@ class CategoryResults(APIView):
                                 rr_index < len(reference_ranking_unique_values) - 1
                                 and ranking_2.reference_ranking == reference_ranking_unique_values[rr_index + 1]
                         ):
-                            preferences_list.append(uged.Preference(
+                            comparisons_list.append(uged.Comparison(
                                 superior=str(ranking_1.alternative.id),
                                 inferior=str(ranking_2.alternative.id),
-                                criteria=[str(criterion.id) for criterion in criteria_for_category]
+                                criteria=[str(criterion.id) for criterion in criteria_for_category],
+                                sign=PairwiseComparison.PREFERENCE
                             ))
                         if ranking_2.reference_ranking == reference_ranking_unique_values[rr_index]:
-                            indifferences_list.append(uged.Indifference(
+                            comparisons_list.append(uged.Comparison(
                                 equal1=str(ranking_1.alternative.id),
                                 equal2=str(ranking_2.alternative.id),
-                                criteria=[str(criterion.id) for criterion in criteria_for_category]
+                                criteria=[str(criterion.id) for criterion in criteria_for_category],
+                                sign=PairwiseComparison.INDIFFERENCE
                             ))
 
         preference_intensities_list = []
@@ -400,7 +393,7 @@ class CategoryResults(APIView):
                         alternative_id_3=str(preference_intensity.alternative_3.id),
                         alternative_id_4=str(preference_intensity.alternative_4.id),
                         criteria=[str(criterion.id) for criterion in criteria_for_intensity],
-                        sign='>'
+                        sign=preference_intensity.type
                     )
                 )
 
@@ -413,7 +406,7 @@ class CategoryResults(APIView):
                         alternative_id_3=str(preference_intensity.alternative_3.id),
                         alternative_id_4=str(preference_intensity.alternative_4.id),
                         criteria=[str(preference_intensity.criterion.id)],
-                        sign='>'
+                        sign=preference_intensity.type
                     )
                 )
 
@@ -454,8 +447,7 @@ class CategoryResults(APIView):
         try:
             ranking, functions, samples = solver.get_representative_value_function_dict(
                 performance_table_dict=performances,
-                preferences=preferences_list,
-                indifferences=indifferences_list,
+                comparisons=comparisons_list,
                 criteria=criteria_uged,
                 positions=best_worst_positions_list,
                 intensities=preference_intensities_list,
@@ -566,11 +558,11 @@ class CategoryResults(APIView):
 
             # HASSE GRAPH
             hasse_graph = solver.get_hasse_diagram_dict(
-                performances,
-                preferences_list,
-                indifferences_list,
-                criteria_uged,
-                best_worst_positions_list
+                performance_table_dict=performances,
+                comparisons=comparisons_list,
+                criteria=criteria_uged,
+                positions=best_worst_positions_list,
+                intensities=preference_intensities_list
             )
             hasse_graph = {int(key): [int(value) for value in values] for key, values in hasse_graph.items()}
             category_root.hasse_graph = hasse_graph
