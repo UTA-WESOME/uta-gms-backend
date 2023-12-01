@@ -115,6 +115,17 @@ class FunctionPoint(models.Model):
 
 
 class PreferenceIntensity(models.Model):
+    PREFERENCE = '>'
+    WEAK_PREFERENCE = '>='
+    INDIFFERENCE = '='
+
+    TYPE_CHOICES = [
+        (PREFERENCE, 'Preference'),
+        (WEAK_PREFERENCE, 'Weak preference'),
+        (INDIFFERENCE, 'Indifference')
+    ]
+
+    type = models.CharField(max_length=12, choices=TYPE_CHOICES, default=PREFERENCE)
     alternative_1 = models.ForeignKey(Alternative, on_delete=models.CASCADE, related_name="preference_intensities_1")
     alternative_2 = models.ForeignKey(Alternative, on_delete=models.CASCADE, related_name="preference_intensities_2")
     alternative_3 = models.ForeignKey(Alternative, on_delete=models.CASCADE, related_name="preference_intensities_3")
@@ -130,15 +141,17 @@ class PreferenceIntensity(models.Model):
 
 
 class PairwiseComparison(models.Model):
-    PREFERENCE = 'preference'
-    INDIFFERENCE = 'indifference'
+    PREFERENCE = '>'
+    WEAK_PREFERENCE = '>='
+    INDIFFERENCE = '='
 
     TYPE_CHOICES = [
         (PREFERENCE, 'Preference'),
+        (WEAK_PREFERENCE, 'Weak preference'),
         (INDIFFERENCE, 'Indifference'),
     ]
 
-    type = models.CharField(max_length=12, choices=TYPE_CHOICES)
+    type = models.CharField(max_length=12, choices=TYPE_CHOICES, default=PREFERENCE)
     alternative_1 = models.ForeignKey(Alternative, on_delete=models.CASCADE, related_name="pairwise_comparisons_1")
     alternative_2 = models.ForeignKey(Alternative, on_delete=models.CASCADE, related_name="pairwise_comparisons_2")
     category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name="pairwise_comparisons")
