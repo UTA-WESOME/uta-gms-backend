@@ -301,6 +301,9 @@ class CategoryResults(APIView):
             for c in criteria
         ]
         if len(criteria_uged) == 0:
+            for category in Category.objects.filter(project=project):
+                category.hasse_graph = {}
+                category.save()
             return Response({"details": "There are no active criteria!"}, status=status.HTTP_400_BAD_REQUEST)
 
         # get alternatives
@@ -540,12 +543,10 @@ class CategoryResults(APIView):
                 ranking.ranking_value = value
                 ranking.save()
 
+            criterion_function_points = FunctionPoint.objects.filter(category=category_root)
+            criterion_function_points.delete()
             # updating criterion functions
             for criterion_id, function in functions.items():
-                criterion_function_points = FunctionPoint.objects \
-                    .filter(criterion_id=int(criterion_id)) \
-                    .filter(category=category_root)
-                criterion_function_points.delete()
 
                 for x, y in function:
                     point = FunctionPointSerializer(data={
