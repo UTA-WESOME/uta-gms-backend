@@ -69,7 +69,7 @@ class FileUpload(APIView):
                     criterion_list = parser.get_criterion_list_csv(uploaded_file_text)
                     uploaded_file_text.seek(0)
                     performance_table_list = parser.get_performance_table_dict_csv(uploaded_file_text)
-                except Exception as e:
+                except Exception:
                     return Response({'message': 'Incorrect file: {}'.format(uploaded_file.name)},
                                     status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
@@ -180,7 +180,7 @@ class FileUpload(APIView):
             xml_file = ordered_files_dict["criteriaScales"]
             try:
                 criteria_scales_dict = BackendParser.get_criterion_scales_dict_xmcda(xml_file)
-            except Exception as e:
+            except Exception:
                 return Response({'message': 'Incorrect file: {}'.format(xml_file.name)},
                                 status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
@@ -190,7 +190,7 @@ class FileUpload(APIView):
             xml_file = ordered_files_dict["criteriaValues"]
             try:
                 criteria_segments_dict = BackendParser.get_criterion_segments_dict_xmcda(xml_file)
-            except Exception as e:
+            except Exception:
                 return Response({'message': 'Incorrect file: {}'.format(xml_file.name)},
                                 status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
@@ -199,7 +199,7 @@ class FileUpload(APIView):
         try:
             parser = Parser()
             criterion_dict = parser.get_criterion_dict_xmcda(xml_file)
-        except Exception as e:
+        except Exception:
             return Response({'message': 'Incorrect file: {}'.format(xml_file.name)},
                             status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
@@ -243,7 +243,7 @@ class FileUpload(APIView):
         try:
             parser = Parser()
             alternative_dict = parser.get_alternative_dict_xmcda(xml_file)
-        except Exception as e:
+        except Exception:
             return Response({'message': 'Incorrect file: {}'.format(xml_file.name)},
                             status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
@@ -276,7 +276,7 @@ class FileUpload(APIView):
             try:
                 parser = Parser()
                 performance_table_dict = parser.get_performance_table_dict_xmcda(xml_file)
-            except Exception as e:
+            except Exception:
                 return Response({'message': 'Incorrect file: {}'.format(xml_file.name)},
                                 status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 

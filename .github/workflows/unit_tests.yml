@@ -24,6 +24,10 @@ jobs:
         env:
           SECRET_KEY: ${{ secrets.SECRET_KEY }}
           ALLOWED_HOSTS: "*"
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
         run: cd utagms && python3 manage.py test utagmsapi
       - name: Run ruff
         run: cd utagms && ruff check .
