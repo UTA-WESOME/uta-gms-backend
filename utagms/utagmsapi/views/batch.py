@@ -3,40 +3,37 @@ from django.db import transaction
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from utagmsengine.solver import Solver, Inconsistency as InconsistencyException
+from utagmsengine.solver import Inconsistency as InconsistencyException, Solver
 
 from ..models import (
-    Project,
-    Criterion,
     Alternative,
-    Performance,
-    FunctionPoint,
-    PreferenceIntensity,
-    PairwiseComparison,
     Category,
+    Criterion,
     CriterionCategory,
-    Ranking,
+    FunctionPoint,
+    Inconsistency,
+    PairwiseComparison,
     Percentage,
-    Inconsistency
+    Performance,
+    PreferenceIntensity,
+    Project,
+    Ranking
 )
-from ..permissions import (
-    IsOwnerOfProject,
-    IsOwnerOfCategory
-)
+from ..permissions import IsOwnerOfCategory, IsOwnerOfProject
 from ..serializers import (
-    CriterionSerializer,
     AlternativeSerializer,
+    CategorySerializer,
+    CriterionCategorySerializer,
+    CriterionSerializer,
+    FunctionPointSerializer,
+    InconsistencySerializer,
+    PairwiseComparisonSerializer,
+    PercentageSerializer,
     PerformanceSerializer,
     PerformanceSerializerUpdate,
     PreferenceIntensitySerializer,
     ProjectSerializerWhole,
-    PairwiseComparisonSerializer,
-    FunctionPointSerializer,
-    CategorySerializer,
-    CriterionCategorySerializer,
-    RankingSerializer,
-    PercentageSerializer,
-    InconsistencySerializer
+    RankingSerializer
 )
 from ..utils.recursive_queries import RecursiveQueries
 

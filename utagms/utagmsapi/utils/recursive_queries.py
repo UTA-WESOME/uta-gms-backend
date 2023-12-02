@@ -1,6 +1,5 @@
-from typing import List
-
 from django.db import connection
+from django.db.models import QuerySet
 
 from utagmsapi.models import Category, Criterion
 
@@ -23,7 +22,7 @@ class RecursiveQueries:
     __CRITERIA_QUERY = """
         WITH RECURSIVE category_tree AS (
             SELECT id FROM utagmsapi_category WHERE id = %s
-            UNION
+            UNIONó
             SELECT c.id
             FROM utagmsapi_category c
             INNER JOIN category_tree ct ON c.parent_id = ct.id
@@ -37,7 +36,7 @@ class RecursiveQueries:
     """
 
     @classmethod
-    def get_categories_subtree(cls, category_id: int) -> List[Category]:
+    def get_categories_subtree(cls, category_id: int) -> QuerySet[Category]:
         """Get subtree of categories with the root as category with provided id"""
         with connection.cursor() as cursor:
             cursor.execute(cls.__CATEGORIES_QUERY, [category_id])
@@ -45,7 +44,7 @@ class RecursiveQueries:
         return Category.objects.filter(id__in=[result[0] for result in results])
 
     @classmethod
-    def get_criteria_for_category(cls, category_id: int) -> List[Criterion]:
+    def get_criteria_for_category(cls, category_id: int) -> QuerySet[Criterion]:
         """Returns Criteria that are leaves of children of the category with provided id"""
         with connection.cursor() as cursor:
             cursor.execute(cls.__CRITERIA_QUERY, [category_id])
