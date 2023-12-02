@@ -23,6 +23,7 @@ jobs:
       - name: Run Tests
         env:
           SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          ALLOWED_HOSTS: *
         run: cd utagms && python3 manage.py test utagmsapi
       - name: Run ruff
         run: cd utagms && ruff check .
