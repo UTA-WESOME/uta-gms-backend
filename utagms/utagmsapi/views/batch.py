@@ -959,12 +959,110 @@ class EngineConverter:
                 List[uged.Comparison], List[uged.Comparison], List[uged.Position], List[uged.Intensity]
             ]
     ) -> None:
+        """
+        Insert inconsistencies into the specified category based on different groups of inconsistencies.
+
+        Parameters
+        ----------
+        category_root : Category
+            The root category for which inconsistencies will be inserted.
+        inconsistencies : Tuple[List[uged.Comparison], List[uged.Comparison], List[uged.Position], List[uged.Intensity]]
+            A tuple containing lists of different types of inconsistencies (comparisons, best-worst positions,
+            preference intensities).
+
+        Notes
+        -----
+        This method takes a tuple containing lists of different types of inconsistencies and inserts them into the specified
+        category. The inconsistencies include comparisons, best-worst positions, and preference intensities. Each group of
+        inconsistencies is associated with a unique group identifier.
+        """
         for i, inconsistencies_group in enumerate(inconsistencies, start=1):
             i_comparisons, i_best_worst, i_intensities = inconsistencies_group
 
             EngineConverter.insert_inconsistencies_comparisons(category_root, i_comparisons, i)
             EngineConverter.insert_inconsistencies_best_worst(category_root, i_best_worst, i)
             EngineConverter.insert_inconsistencies_preference_intensities(category_root, i_intensities, i)
+
+    @staticmethod
+    def insert_percentages(category_root: Category, samples: Dict[str, List[float]]) -> None:
+        """
+        Insert percentage values into the specified category for different alternatives.
+
+        Parameters
+        ----------
+        category_root : Category
+            The root category for which percentage values will be inserted.
+        samples : Dict[str, List[float]]
+            A dictionary where keys are alternative identifiers and values are lists of percentage values.
+
+        Notes
+        -----
+        This method takes a dictionary of alternative identifiers and corresponding lists of percentage values and inserts
+        them as Percentage instances into the specified category. Each alternative's percentages are associated with
+        distinct positions.
+        """
+        for key, percentages_data in samples.items():
+            for i, value in enumerate(percentages_data):
+                percentage_serializer = PercentageSerializer(data={
+                    'position': i + 1,
+                    'percent': value,
+                    'alternative': int(key)
+                })
+                if percentage_serializer.is_valid():
+                    percentage_serializer.save(category=category_root)
+
+    @staticmethod
+    def update_rankings(category_root: Category, ranking: Dict[str, float]) -> None:
+        """
+        Update rankings for alternatives in the specified category based on the provided ranking dictionary.
+
+        Parameters
+        ----------
+        category_root : Category
+            The root category for which rankings will be updated.
+        ranking : Dict[str, float]
+            A dictionary where keys are alternative identifiers, and values are corresponding ranking values.
+
+        Notes
+        -----
+        This method updates the rankings of alternatives within the specified category. The ranking dictionary should
+        contain alternative identifiers as keys and their associated ranking values. The alternatives are ranked in descending
+        order based on their ranking values, and the rankings are updated accordingly.
+        """
+        for i, (key, value) in enumerate(sorted(ranking.items(), key=lambda x: -x[1]), start=1):
+            ranking = Ranking.objects.filter(alternative_id=int(key)).filter(category=category_root).first()
+            ranking.ranking = i
+            ranking.ranking_value = value
+            ranking.save()
+
+    @staticmethod
+    def insert_criterion_functions(category_root: Category, functions: Dict[str, List[Tuple[float, float]]]) -> None:
+        """
+        Insert criterion functions into the specified category based on the provided functions dictionary.
+
+        Parameters
+        ----------
+        category_root: Category
+            The root category for which criterion functions will be inserted.
+        functions: Dict[str, List[Tuple[float, float]]]
+            A dictionary where keys are criterion identifiers, and values are lists of tuples representing
+            (abscissa, ordinate) pairs for the criterion function.
+
+        Notes
+        -----
+        This method inserts criterion functions into the specified category. The functions dictionary should contain
+        criterion identifiers as keys, and the corresponding values should be lists of tuples representing (abscissa, ordinate)
+        pairs for the criterion function. Multiple points define a function for a particular criterion.
+        """
+        for criterion_id, function in functions.items():
+            for x, y in function:
+                point = FunctionPointSerializer(data={
+                    'ordinate': y,
+                    'abscissa': x,
+                    'criterion': int(criterion_id)
+                })
+                if point.is_valid():
+                    point.save(category=category_root)
 
 
 class ProjectBatch(APIView):
@@ -1238,39 +1336,17 @@ class CategoryResults(APIView):
         else:
 
             # updating percentages
-            for key, percentages_data in samples.items():
-                percentages = Percentage.objects.filter(alternative_id=int(key)).filter(category=category_root)
-                percentages.delete()
-
-                for i, value in enumerate(percentages_data):
-                    percentage_serializer = PercentageSerializer(data={
-                        'position': i + 1,
-                        'percent': value,
-                        'alternative': int(key)
-                    })
-                    if percentage_serializer.is_valid():
-                        percentage_serializer.save(category=category_root)
+            percentages = Percentage.objects.filter(category=category_root)
+            percentages.delete()
+            EngineConverter.insert_percentages(category_root, samples)
 
             # updating rankings
-            for i, (key, value) in enumerate(sorted(ranking.items(), key=lambda x: -x[1]), start=1):
-                ranking = Ranking.objects.filter(alternative_id=int(key)).filter(category=category_root).first()
-                ranking.ranking = i
-                ranking.ranking_value = value
-                ranking.save()
+            EngineConverter.update_rankings(category_root, ranking)
 
+            # updating criterion functions
             criterion_function_points = FunctionPoint.objects.filter(category=category_root)
             criterion_function_points.delete()
-            # updating criterion functions
-            for criterion_id, function in functions.items():
-
-                for x, y in function:
-                    point = FunctionPointSerializer(data={
-                        'ordinate': y,
-                        'abscissa': x,
-                        'criterion': int(criterion_id)
-                    })
-                    if point.is_valid():
-                        point.save(category=category_root)
+            EngineConverter.insert_criterion_functions(category_root, functions)
 
             # HASSE GRAPH
             hasse_graph = solver.get_hasse_diagram_dict(
