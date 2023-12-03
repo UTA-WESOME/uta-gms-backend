@@ -600,6 +600,243 @@ class BatchOperations:
             return pref_intensity_serializer.save(project=project)
 
 
+class EngineConverter:
+
+    @staticmethod
+    def get_criteria(criteria: List[Criterion]) -> List[uged.Criterion]:
+        """
+        Convert a list of Django Criterion instances to a list of utagmsengine.Criterion instances.
+
+        Parameters
+        ----------
+        criteria : List[Criterion]
+            A list of Django Criterion instances.
+
+        Returns
+        -------
+        List[uged.Criterion]
+            A list of uged.Criterion instances.
+        """
+        return [
+            uged.Criterion(criterion_id=str(c.id), number_of_linear_segments=c.linear_segments, gain=c.gain)
+            for c in criteria
+        ]
+
+    @staticmethod
+    def get_performances(alternatives: List[Alternative], criteria: List[Criterion]) -> Dict[str, Dict[str, float]]:
+        """
+        Retrieve performances for a list of alternatives and criteria.
+
+        Parameters
+        ----------
+        alternatives : List[Alternative]
+            A list of Django Alternative instances.
+        criteria : List[Criterion]
+            A list of Django Criterion instances.
+
+        Returns
+        -------
+        Dict[str, Dict[str, float]]
+            A dictionary representing performances for each alternative and criterion.
+            The keys of the outer dictionary are alternative IDs, and the inner dictionaries
+            have criterion IDs as keys and corresponding performances as values.
+        """
+        performances = {}
+        for alternative in alternatives:
+            performances[str(alternative.id)] = {
+                str(criterion_id): value for criterion_id, value in
+                Performance.objects
+                .filter(alternative=alternative)
+                .filter(criterion__in=criteria)
+                .values_list('criterion', 'value')
+            }
+        return performances
+
+    @staticmethod
+    def get_comparisons(project: Project, categories: List[Category]) -> List[uged.Comparison]:
+        """
+        Retrieve comparisons for a project and a list of categories.
+
+        Parameters
+        ----------
+        project : Project
+            A Django Project instance.
+        categories : List[Category]
+            A list of Django Category instances.
+
+        Returns
+        -------
+        List[uged.Comparison]
+            A list of Comparison instances representing pairwise comparisons or rankings.
+
+        Notes
+        -----
+        If the project is in pairwise mode, it retrieves pairwise comparisons.
+        If not, it generates comparisons based on rankings within each category.
+        """
+        comparisons_list = []
+        if project.pairwise_mode:
+            for pairwise_comparison in PairwiseComparison.objects.filter(category__in=categories):
+                # we have to find criteria that the pairwise comparison is related to
+                criteria_for_comparison = Criterion.objects.filter(
+                    id__in=RecursiveQueries.get_criteria_for_category(pairwise_comparison.category.id)
+                )
+                comparisons_list.append(
+                    uged.Comparison(
+                        alternative_1=str(pairwise_comparison.alternative_1.id),
+                        alternative_2=str(pairwise_comparison.alternative_2.id),
+                        criteria=[str(criterion.id) for criterion in criteria_for_comparison],
+                        sign=pairwise_comparison.type
+                    )
+                )
+        else:
+            for category in categories:
+                criteria_for_category = RecursiveQueries.get_criteria_for_category(category.id)
+                rankings = Ranking.objects.filter(category=category)
+                # we get unique ranking values and sort them
+                reference_ranking_unique_values = list(set(rankings.values_list('reference_ranking', flat=True)))
+                reference_ranking_unique_values.sort()
+                # now we need to check every alternative and find other alternatives that are below this alternative in
+                # reference_ranking
+                for ranking_1 in rankings:
+                    # 0 in reference_ranking means that it was not placed in the reference ranking
+                    if ranking_1.reference_ranking == 0:
+                        continue
+                    # we have to get the index in the reference_ranking_unique_values of the current ranking's
+                    # reference_ranking value
+                    rr_index = reference_ranking_unique_values.index(ranking_1.reference_ranking)
+                    for ranking_2 in rankings:
+                        if ranking_1.id == ranking_2.id:
+                            continue
+                        if (
+                                # we need to skip checking if the rr_index is the last one in the unique ranking,
+                                # otherwise we will out of bounds for the reference_ranking_unique_values list
+                                # when doing rr_index + 1
+                                rr_index < len(reference_ranking_unique_values) - 1
+                                and ranking_2.reference_ranking == reference_ranking_unique_values[rr_index + 1]
+                        ):
+                            comparisons_list.append(uged.Comparison(
+                                superior=str(ranking_1.alternative.id),
+                                inferior=str(ranking_2.alternative.id),
+                                criteria=[str(criterion.id) for criterion in criteria_for_category],
+                                sign=PairwiseComparison.PREFERENCE
+                            ))
+                        if ranking_2.reference_ranking == reference_ranking_unique_values[rr_index]:
+                            comparisons_list.append(uged.Comparison(
+                                equal1=str(ranking_1.alternative.id),
+                                equal2=str(ranking_2.alternative.id),
+                                criteria=[str(criterion.id) for criterion in criteria_for_category],
+                                sign=PairwiseComparison.INDIFFERENCE
+                            ))
+        return comparisons_list
+
+    @staticmethod
+    def get_preference_intensities(
+            project: Project,
+            categories: List[Category],
+            criteria: List[Criterion]
+    ) -> List[uged.Intensity]:
+        """
+        Retrieve preference intensities for a project, defined on categories and criteria.
+
+        Parameters
+        ----------
+        project : Project
+            A Django Project instance.
+        categories : List[Category]
+            A list of Django Category instances.
+        criteria : List[Criterion]
+            A list of Django Criterion instances.
+
+        Returns
+        -------
+        List[uged.Intensity]
+            A list of Intensity instances representing preference intensities.
+
+        Notes
+        -----
+        Preference intensities can be defined on the whole category or on a specific criterion.
+        """
+        preference_intensities_list = []
+        for preference_intensity in PreferenceIntensity.objects.filter(project=project):
+            # intensity defined on the whole category
+            if preference_intensity.category in categories:
+                # get criteria for this category
+                criteria_for_intensity = Criterion.objects.filter(
+                    id__in=RecursiveQueries.get_criteria_for_category(preference_intensity.category.id)
+                )
+                preference_intensities_list.append(
+                    uged.Intensity(
+                        alternative_id_1=str(preference_intensity.alternative_1.id),
+                        alternative_id_2=str(preference_intensity.alternative_2.id),
+                        alternative_id_3=str(preference_intensity.alternative_3.id),
+                        alternative_id_4=str(preference_intensity.alternative_4.id),
+                        criteria=[str(criterion.id) for criterion in criteria_for_intensity],
+                        sign=preference_intensity.type
+                    )
+                )
+            # intensity defined on a criterion
+            if preference_intensity.criterion in criteria:
+                preference_intensities_list.append(
+                    uged.Intensity(
+                        alternative_id_1=str(preference_intensity.alternative_1.id),
+                        alternative_id_2=str(preference_intensity.alternative_2.id),
+                        alternative_id_3=str(preference_intensity.alternative_3.id),
+                        alternative_id_4=str(preference_intensity.alternative_4.id),
+                        criteria=[str(preference_intensity.criterion.id)],
+                        sign=preference_intensity.type
+                    )
+                )
+        return preference_intensities_list
+
+    @staticmethod
+    def get_best_worst_positions(categories: List[Category]) -> List[uged.Position]:
+        """
+        Retrieve best and worst positions for alternatives within specified categories.
+
+        Parameters
+        ----------
+        categories : List[Category]
+            A list of Django Category instances.
+
+        Returns
+        -------
+        List[uged.Position]
+            A list of Position instances representing best and worst positions for alternatives.
+
+        Notes
+        -----
+        The best and worst positions are determined within the specified categories.
+        """
+        best_worst_positions_list = []
+        for category in categories:
+            rankings_count = Ranking.objects.filter(category=category).count()
+            criteria_for_category = RecursiveQueries.get_criteria_for_category(category.id)
+            for ranking in Ranking.objects.filter(category=category):
+                if ranking.best_position is not None and ranking.worst_position is not None:
+                    best_worst_positions_list.append(uged.Position(
+                        alternative_id=str(ranking.alternative.id),
+                        worst_position=ranking.worst_position,
+                        best_position=ranking.best_position,
+                        criteria=[str(criterion.id) for criterion in criteria_for_category]
+                    ))
+                elif ranking.best_position is not None:
+                    best_worst_positions_list.append(uged.Position(
+                        alternative_id=str(ranking.alternative.id),
+                        worst_position=rankings_count,
+                        best_position=ranking.best_position,
+                        criteria=[str(criterion.id) for criterion in criteria_for_category]
+                    ))
+                elif ranking.worst_position is not None:
+                    best_worst_positions_list.append(uged.Position(
+                        alternative_id=str(ranking.alternative.id),
+                        worst_position=ranking.worst_position,
+                        best_position=1,
+                        criteria=[str(criterion.id) for criterion in criteria_for_category]
+                    ))
+        return best_worst_positions_list
+
+
 class ProjectBatch(APIView):
     """
     API View for handling batch operations related to projects.
@@ -829,150 +1066,25 @@ class CategoryResults(APIView):
         criteria = RecursiveQueries.get_criteria_for_category(category_id)
 
         # get uta-gms-engine criteria
-        criteria_uged = [
-            uged.Criterion(criterion_id=str(c.id), number_of_linear_segments=c.linear_segments, gain=c.gain)
-            for c in criteria
-        ]
+        criteria_uged = EngineConverter.get_criteria(criteria)
         if len(criteria_uged) == 0:
             for category in Category.objects.filter(project=project):
                 category.hasse_graph = {}
                 category.save()
             return Response({"details": "There are no active criteria!"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # get alternatives
-        alternatives = Alternative.objects.filter(project=project)
-
         # get performance_table_list
-        # we need performances only from criteria
-        performances = {}
-        for alternative in alternatives:
-            performances[str(alternative.id)] = {
-                str(criterion_id): value for criterion_id, value in
-                Performance.objects
-                .filter(alternative=alternative)
-                .filter(criterion__in=criteria)
-                .values_list('criterion', 'value')
-            }
+        alternatives = Alternative.objects.filter(project=project)
+        performances = EngineConverter.get_performances(alternatives, criteria)
 
-        # get preferences and indifferences
-        comparisons_list = []
-        if project.pairwise_mode:
-            for pairwise_comparison in PairwiseComparison.objects.filter(category__in=categories):
-                # we have to find criteria that the pairwise comparison is related to
-                criteria_for_comparison = Criterion.objects.filter(
-                    id__in=RecursiveQueries.get_criteria_for_category(pairwise_comparison.category.id)
-                )
-                comparisons_list.append(
-                    uged.Comparison(
-                        alternative_1=str(pairwise_comparison.alternative_1.id),
-                        alternative_2=str(pairwise_comparison.alternative_2.id),
-                        criteria=[str(criterion.id) for criterion in criteria_for_comparison],
-                        sign=pairwise_comparison.type
-                    )
-                )
-        else:
-            for category in categories:
-                criteria_for_category = RecursiveQueries.get_criteria_for_category(category.id)
-                rankings = Ranking.objects.filter(category=category)
-                # we get unique ranking values and sort them
-                reference_ranking_unique_values = list(set(rankings.values_list('reference_ranking', flat=True)))
-                reference_ranking_unique_values.sort()
-                # now we need to check every alternative and find other alternatives that are below this alternative in
-                # reference_ranking
-                for ranking_1 in rankings:
+        # get comparisons
+        comparisons_list = EngineConverter.get_comparisons(project, categories)
 
-                    # 0 in reference_ranking means that it was not placed in the reference ranking
-                    if ranking_1.reference_ranking == 0:
-                        continue
-
-                    # we have to get the index in the reference_ranking_unique_values of the current ranking's
-                    # reference_ranking value
-                    rr_index = reference_ranking_unique_values.index(ranking_1.reference_ranking)
-                    for ranking_2 in rankings:
-                        if ranking_1.id == ranking_2.id:
-                            continue
-                        if (
-                                # we need to skip checking if the rr_index is the last one in the unique ranking,
-                                # otherwise we will out of bounds for the reference_ranking_unique_values list
-                                # when doing rr_index + 1
-                                rr_index < len(reference_ranking_unique_values) - 1
-                                and ranking_2.reference_ranking == reference_ranking_unique_values[rr_index + 1]
-                        ):
-                            comparisons_list.append(uged.Comparison(
-                                superior=str(ranking_1.alternative.id),
-                                inferior=str(ranking_2.alternative.id),
-                                criteria=[str(criterion.id) for criterion in criteria_for_category],
-                                sign=PairwiseComparison.PREFERENCE
-                            ))
-                        if ranking_2.reference_ranking == reference_ranking_unique_values[rr_index]:
-                            comparisons_list.append(uged.Comparison(
-                                equal1=str(ranking_1.alternative.id),
-                                equal2=str(ranking_2.alternative.id),
-                                criteria=[str(criterion.id) for criterion in criteria_for_category],
-                                sign=PairwiseComparison.INDIFFERENCE
-                            ))
-
-        preference_intensities_list = []
         # get preference intensities
-        for preference_intensity in PreferenceIntensity.objects.filter(project=project):
-
-            # intensity defined on the whole category
-            if preference_intensity.category in categories:
-                # get criteria for this category
-                criteria_for_intensity = Criterion.objects.filter(
-                    id__in=RecursiveQueries.get_criteria_for_category(preference_intensity.category.id)
-                )
-                preference_intensities_list.append(
-                    uged.Intensity(
-                        alternative_id_1=str(preference_intensity.alternative_1.id),
-                        alternative_id_2=str(preference_intensity.alternative_2.id),
-                        alternative_id_3=str(preference_intensity.alternative_3.id),
-                        alternative_id_4=str(preference_intensity.alternative_4.id),
-                        criteria=[str(criterion.id) for criterion in criteria_for_intensity],
-                        sign=preference_intensity.type
-                    )
-                )
-
-            # intensity defined on a criterion
-            if preference_intensity.criterion in criteria:
-                preference_intensities_list.append(
-                    uged.Intensity(
-                        alternative_id_1=str(preference_intensity.alternative_1.id),
-                        alternative_id_2=str(preference_intensity.alternative_2.id),
-                        alternative_id_3=str(preference_intensity.alternative_3.id),
-                        alternative_id_4=str(preference_intensity.alternative_4.id),
-                        criteria=[str(preference_intensity.criterion.id)],
-                        sign=preference_intensity.type
-                    )
-                )
+        preference_intensities_list = EngineConverter.get_preference_intensities(project, categories, criteria)
 
         # get best-worst positions
-        best_worst_positions_list = []
-        for category in categories:
-            rankings_count = Ranking.objects.filter(category=category).count()
-            criteria_for_category = RecursiveQueries.get_criteria_for_category(category.id)
-            for ranking in Ranking.objects.filter(category=category):
-                if ranking.best_position is not None and ranking.worst_position is not None:
-                    best_worst_positions_list.append(uged.Position(
-                        alternative_id=str(ranking.alternative.id),
-                        worst_position=ranking.worst_position,
-                        best_position=ranking.best_position,
-                        criteria=[str(criterion.id) for criterion in criteria_for_category]
-                    ))
-                elif ranking.best_position is not None:
-                    best_worst_positions_list.append(uged.Position(
-                        alternative_id=str(ranking.alternative.id),
-                        worst_position=rankings_count,
-                        best_position=ranking.best_position,
-                        criteria=[str(criterion.id) for criterion in criteria_for_category]
-                    ))
-                elif ranking.worst_position is not None:
-                    best_worst_positions_list.append(uged.Position(
-                        alternative_id=str(ranking.alternative.id),
-                        worst_position=ranking.worst_position,
-                        best_position=1,
-                        criteria=[str(criterion.id) for criterion in criteria_for_category]
-                    ))
+        best_worst_positions_list = EngineConverter.get_best_worst_positions(categories)
 
         # delete previous inconsistencies if any
         inconsistencies = Inconsistency.objects.filter(category=category_root)
