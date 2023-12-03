@@ -601,9 +601,44 @@ class BatchOperations:
 
 
 class ProjectBatch(APIView):
+    """
+    API View for handling batch operations related to projects.
+
+    This view provides:
+     - endpoint to retrieve detailed information about a specific project.
+     - endpoint to perform batch updates on various aspects of a project,
+       such as criteria, alternatives, categories, preference intensities, and more.
+
+    Permissions
+    -----------
+    - Users must be authenticated.
+    - Users must be the owner of the project to access this view.
+
+    Methods
+    -------
+    - GET: Retrieve detailed information about a specific project.
+    - PATCH: Perform batch updates on a project based on the provided data.
+    """
+
     permission_classes = [IsOwnerOfProject]
 
     def get(self, request, *args, **kwargs):
+        """
+        Retrieve detailed information about a specific project.
+
+        Parameters
+        ----------
+        request : rest_framework.request.Request
+            The HTTP request object.
+        kwargs : dict
+            A dictionary containing additional keyword arguments.
+            - project_pk (str): The unique identifier of the project to retrieve details for.
+
+        Returns
+        -------
+        Response
+            A serialized representation of the project's detailed information.
+        """
         project_id = kwargs.get('project_pk')
         project = Project.objects.filter(id=project_id).first()
         project_serializer = ProjectSerializerWhole(project)
@@ -611,6 +646,32 @@ class ProjectBatch(APIView):
 
     @transaction.atomic
     def patch(self, request, *args, **kwargs):
+        """
+        Perform batch updates on a project based on the provided data.
+
+        Parameters
+        ----------
+        request : rest_framework.request.Request
+            The HTTP request object. It should include the following data:
+            - pairwise_mode: bool, optional
+                Indicates whether to set the project's pairwise mode.
+            - criteria: list, optional
+                A list of dictionaries representing criteria data.
+            - alternatives: list, optional
+                A list of dictionaries representing alternatives data.
+            - categories: list, optional
+                A list of dictionaries representing categories data.
+            - preference_intensities: list, optional
+                A list of dictionaries representing preference intensities data.
+        kwargs : dict
+            A dictionary containing additional keyword arguments.
+            - project_pk (str): The unique identifier of the project to perform batch updates on.
+
+        Returns
+        -------
+        Response
+            A serialized representation of the updated project.
+        """
         data = request.data
         project_id = kwargs.get("project_pk")
         project = Project.objects.filter(id=project_id).first()
