@@ -58,7 +58,7 @@ class BatchOperations:
     delete_alternatives(project: Project, alternatives_data: List[Dict[str, Union[str, int, List[Dict[str, Union[str, int]]]]]]) -> None:
         Delete alternatives from the project based on the provided alternatives data.
 
-    insert_update_alternatives(project: Project, alternative_data: Dict[str, Union[str, int, List[Dict[str, Union[str, int]]]]]) -> None:
+    insert_update_alternative(project: Project, alternative_data: Dict[str, Union[str, int, List[Dict[str, Union[str, int]]]]]) -> None:
         Insert or update alternatives within a project based on the provided alternative data.
 
     delete_performances(alternative: Alternative, performances_data: List[Dict[str, Union[float, str]]]) -> None:
@@ -185,7 +185,7 @@ class BatchOperations:
         project.alternatives.filter(id__in=alternatives_ids_to_delete).delete()
 
     @staticmethod
-    def insert_update_alternatives(
+    def insert_update_alternative(
             project: Project,
             alternative_data: Dict[str, Union[str, int, List[Dict[str, Union[str, float]]]]]
     ) -> Union[Criterion, None]:
@@ -663,7 +663,7 @@ class ProjectBatch(APIView):
         # insert or update alternatives
         for alternative_data in alternatives_data:
             alternative_id = alternative_data.get('id')
-            alternative = BatchOperations.insert_update_alternatives(project, alternative_data)
+            alternative = BatchOperations.insert_update_alternative(project, alternative_data)
             if alternative is not None:
                 # Performances
                 performances_data = alternative_data.get('performances', [])
