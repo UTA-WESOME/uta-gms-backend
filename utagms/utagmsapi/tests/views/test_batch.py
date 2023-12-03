@@ -1,7 +1,7 @@
 from django.test import TestCase
 from parameterized import parameterized
 
-from utagmsapi.models import Alternative, Criterion, Project, User
+from utagmsapi.models import Alternative, Criterion, Performance, Project, User
 from utagmsapi.views.batch import BatchOperations
 
 
@@ -9,13 +9,25 @@ class BatchOperationsTestCase(TestCase):
     def setUp(self):
         self.user = User.objects.create(email="test@test.com", password="test", name="test", surname="test")
         self.project = Project.objects.create(name="Test Project", shareable=False, pairwise_mode=False, user=self.user)
+
         self.criterion_g1 = Criterion.objects.create(name='g1', gain=True, linear_segments=1, project=self.project)
         self.criterion_g2 = Criterion.objects.create(name='g2', gain=True, linear_segments=1, project=self.project)
         self.criterion_c1 = Criterion.objects.create(name='c1', gain=True, linear_segments=1, project=self.project)
+        self.criteria = [self.criterion_g1, self.criterion_g2, self.criterion_c1]
+
         self.alternative_A = Alternative.objects.create(name='A', project=self.project)
         self.alternative_B = Alternative.objects.create(name='B', project=self.project)
         self.alternative_C = Alternative.objects.create(name='C', project=self.project)
         self.alternative_D = Alternative.objects.create(name='D', project=self.project)
+        self.alternatives = [self.alternative_A, self.alternative_B, self.alternative_C, self.alternative_D]
+
+        self.performance_A_g1 = Performance.objects.create(value=1, alternative=self.alternative_A,
+                                                           criterion=self.criterion_g1)
+        self.performance_A_g2 = Performance.objects.create(value=1, alternative=self.alternative_A,
+                                                           criterion=self.criterion_g2)
+        self.performance_A_c1 = Performance.objects.create(value=1, alternative=self.alternative_A,
+                                                           criterion=self.criterion_c1)
+        self.performances = [self.performance_A_g1, self.performance_A_g2, self.performance_A_c1]
 
     @parameterized.expand([
         ("delete all", [], []),
@@ -41,7 +53,7 @@ class BatchOperationsTestCase(TestCase):
             criterion_data['id'] = getattr(self, criterion_name).id
         result = BatchOperations.insert_update_criterion(self.project, criterion_data)
         if expect_insert:
-            self.assertNotIn(result.id, [self.criterion_g1.id, self.criterion_g2.id, self.criterion_c1.id])
+            self.assertNotIn(result.id, self.criteria)
         else:
             self.assertEqual(result.id, getattr(self, criterion_name).id)
         self.assertEqual(result.name, criterion_data['name'])
@@ -73,8 +85,20 @@ class BatchOperationsTestCase(TestCase):
             alternative_data['id'] = getattr(self, alternative_name).id
         result = BatchOperations.insert_update_alternative(self.project, alternative_data)
         if expect_insert:
-            self.assertNotIn(result.id,
-                             [self.alternative_A, self.alternative_B, self.alternative_C, self.alternative_D])
+            self.assertNotIn(result.id, self.alternatives)
         else:
             self.assertEqual(result.id, getattr(self, alternative_name).id)
         self.assertEqual(result.name, alternative_data['name'])
+
+    @parameterized.expand([
+        ("delete all", [], []),
+        ("delete none",
+         ['performance_A_g1', 'performance_A_g2', 'performance_A_c1'],
+         ['performance_A_g1', 'performance_A_g2', 'performance_A_c1']),
+    ])
+    def test_delete_performances(self, name, performances_names, expected_result):
+        performances_data = [{'id': getattr(self, name).id} for name in performances_names]
+        expected_result = [getattr(self, name) for name in expected_result]
+
+        BatchOperations.delete_performances(self.alternative_A, performances_data)
+        self.assertQuerySetEqual(self.alternative_A.performances.all(), expected_result)
