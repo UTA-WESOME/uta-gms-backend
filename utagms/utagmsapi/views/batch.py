@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Tuple, Union
 
 import utagmsengine.dataclasses as uged
 from django.db import transaction
@@ -836,6 +836,136 @@ class EngineConverter:
                     ))
         return best_worst_positions_list
 
+    @staticmethod
+    def insert_inconsistencies_comparisons(
+            category_root: Category,
+            comparisons: List[uged.Comparison],
+            group: int
+    ) -> None:
+        """
+        Insert inconsistencies based on a list of comparisons within the specified category.
+
+        Parameters
+        ----------
+        category_root : Category
+            The root category for which inconsistencies will be inserted.
+        comparisons : List[uged.Comparison]
+            A list of Comparison instances containing information about pairwise comparisons.
+        group : int
+            The group identifier for the inconsistencies.
+
+        Notes
+        -----
+        This method takes a list of uta-gms-engine Comparison instances and inserts inconsistencies into the specified
+        category based on the provided comparisons.
+        """
+        for comparison in comparisons:
+            # get names of the alternatives
+            name_1 = Alternative.objects.get(id=int(comparison.alternative_1)).name
+            name_2 = Alternative.objects.get(id=int(comparison.alternative_2)).name
+            criteria_names = Criterion.objects \
+                .filter(id__in=[int(_id) for _id in comparison.criteria]) \
+                .values_list('name', flat=True)
+            comparison_type = comparison.sign
+            i_serializer = InconsistencySerializer(data={
+                'group': group,
+                'data': f"{name_1} {comparison_type} {name_2} on {', '.join(criteria_names)}",
+                'type': comparison_type
+            })
+            if i_serializer.is_valid():
+                i_serializer.save(category=category_root)
+
+    @staticmethod
+    def insert_inconsistencies_best_worst(
+            category_root: Category,
+            best_worsts: List[uged.Position],
+            group: int
+    ) -> None:
+        """
+        Insert inconsistencies based on a list of best-worst positions within the specified category.
+
+        Parameters
+        ----------
+        category_root : Category
+            The root category for which inconsistencies will be inserted.
+        best_worsts : List[uged.Position]
+            A list of Position instances containing information about best-worst positions.
+        group : int
+            The group identifier for the inconsistencies.
+
+        Notes
+        -----
+        This method takes a list of uged.Position instances representing best-worst positions and inserts
+        inconsistencies into the specified category based on the provided positions.
+        """
+        for best_worst in best_worsts:
+            name = Alternative.objects.get(id=int(best_worst.alternative_id)).name
+            criteria_names = Criterion.objects \
+                .filter(id__in=[int(_id) for _id in best_worst.criteria]) \
+                .values_list('name', flat=True)
+            i_serializer = InconsistencySerializer(data={
+                'group': group,
+                'data': f"{name} - best position {best_worst.best_position}, worst position {best_worst.worst_position}"
+                        f" on {', '.join(criteria_names)}",
+                'type': Inconsistency.POSITION
+            })
+            if i_serializer.is_valid():
+                i_serializer.save(category=category_root)
+
+    @staticmethod
+    def insert_inconsistencies_preference_intensities(
+            category_root: Category,
+            intensities: List[uged.Intensity],
+            group: int
+    ) -> None:
+        """
+        Insert inconsistencies based on a list of preference intensities within the specified category.
+
+        Parameters
+        ----------
+        category_root : Category
+            The root category for which inconsistencies will be inserted.
+        intensities : List[uged.Intensity]
+            A list of Intensity instances containing information about preference intensities.
+        group : int
+            The group identifier for the inconsistencies.
+
+        Notes
+        -----
+        This method takes a list of uged.Intensity instances representing preference intensities and inserts
+        inconsistencies into the specified category based on the provided intensities.
+        """
+        for intensity in intensities:
+            name_1 = Alternative.objects.get(id=int(intensity.alternative_id_1)).name
+            name_2 = Alternative.objects.get(id=int(intensity.alternative_id_2)).name
+            name_3 = Alternative.objects.get(id=int(intensity.alternative_id_3)).name
+            name_4 = Alternative.objects.get(id=int(intensity.alternative_id_4)).name
+            criteria_names = Criterion.objects \
+                .filter(id__in=[int(_id) for _id in intensity.criteria]) \
+                .values_list('name', flat=True)
+            intensity_sign = intensity.sign
+            i_serializer = InconsistencySerializer(data={
+                'group': group,
+                'data': f"{name_1} - {name_2} {intensity_sign} {name_3} - {name_4} on {', '.join(criteria_names)}",
+                'type': intensity_sign
+            })
+            if i_serializer.is_valid():
+                i_serializer.save(category=category_root)
+
+    @staticmethod
+    def insert_inconsistencies(
+            category_root: Category,
+            inconsistencies: Tuple[
+                List[uged.Comparison], List[uged.Comparison], List[uged.Position], List[uged.Intensity]
+            ]
+    ) -> None:
+        for i, inconsistencies_group in enumerate(inconsistencies, start=1):
+            i_comparisons, i_best_worst, i_intensities = inconsistencies_group
+
+            EngineConverter.insert_inconsistencies_comparisons(category_root, i_comparisons, i)
+            EngineConverter.insert_inconsistencies_best_worst(category_root, i_best_worst, i)
+            EngineConverter.insert_inconsistencies_preference_intensities(category_root, i_intensities, i)
+
 
 class ProjectBatch(APIView):
     """
@@ -1104,67 +1234,7 @@ class CategoryResults(APIView):
             )
         except InconsistencyException as e:
             inconsistencies = e.data
-            for i, inconsistencies_group in enumerate(inconsistencies, start=1):
-                i_preferences, i_indifferences, i_best_worst, i_intensities = inconsistencies_group
-
-                for preference in i_preferences:
-                    # get names of the alternatives
-                    name_1 = Alternative.objects.get(id=int(preference.superior)).name
-                    name_2 = Alternative.objects.get(id=int(preference.inferior)).name
-                    criteria_names = Criterion.objects.filter(
-                        id__in=[int(_id) for _id in preference.criteria]
-                    ).values_list('name', flat=True)
-                    i_serializer = InconsistencySerializer(data={
-                        'group': i,
-                        'data': f"{name_1} > {name_2} on {', '.join(criteria_names)}",
-                        'type': Inconsistency.PREFERENCE
-                    })
-                    if i_serializer.is_valid():
-                        i_serializer.save(category=category_root)
-
-                for indifference in i_indifferences:
-                    # get names of the alternatives
-                    name_1 = Alternative.objects.get(id=int(indifference.equal1)).name
-                    name_2 = Alternative.objects.get(id=int(indifference.equal2)).name
-                    criteria_names = Criterion.objects.filter(
-                        id__in=[int(_id) for _id in indifference.criteria]
-                    ).values_list('name', flat=True)
-                    i_serializer = InconsistencySerializer(data={
-                        'group': i,
-                        'data': f"{name_1} = {name_2} on {', '.join(criteria_names)}",
-                        'type': Inconsistency.INDIFFERENCE
-                    })
-                    if i_serializer.is_valid():
-                        i_serializer.save(category=category_root)
-
-                for best_worst in i_best_worst:
-                    name = Alternative.objects.get(id=int(best_worst.alternative_id)).name
-                    criteria_names = Criterion.objects.filter(
-                        id__in=[int(_id) for _id in best_worst.criteria]
-                    ).values_list('name', flat=True)
-                    i_serializer = InconsistencySerializer(data={
-                        'group': i,
-                        'data': f"{name} - best position {best_worst.best_position}, worst position {best_worst.worst_position} on {', '.join(criteria_names)}",
-                        'type': Inconsistency.POSITION
-                    })
-                    if i_serializer.is_valid():
-                        i_serializer.save(category=category_root)
-
-                for intensity in i_intensities:
-                    name_1 = Alternative.objects.get(id=int(intensity.alternative_id_1)).name
-                    name_2 = Alternative.objects.get(id=int(intensity.alternative_id_2)).name
-                    name_3 = Alternative.objects.get(id=int(intensity.alternative_id_3)).name
-                    name_4 = Alternative.objects.get(id=int(intensity.alternative_id_4)).name
-                    criteria_names = Criterion.objects.filter(
-                        id__in=[int(_id) for _id in intensity.criteria]
-                    ).values_list('name', flat=True)
-                    i_serializer = InconsistencySerializer(data={
-                        'group': i,
-                        'data': f"{name_1} - {name_2} > {name_3} - {name_4} on {', '.join(criteria_names)}",
-                        'type': Inconsistency.INTENSITY
-                    })
-                    if i_serializer.is_valid():
-                        i_serializer.save(category=category_root)
+            EngineConverter.insert_inconsistencies(category_root, inconsistencies)
         else:
 
             # updating percentages
