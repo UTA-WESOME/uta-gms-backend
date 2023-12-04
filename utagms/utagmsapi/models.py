@@ -31,8 +31,7 @@ class Category(models.Model):
     name = models.CharField(max_length=64, help_text="Category name")
     color = models.CharField(max_length=15, help_text="Color of the category")
     active = models.BooleanField(default=True, help_text="Should the category be used in calculating results?")
-    hasse_graph = models.JSONField(null=True,
-                                   help_text="Graph that represents necessary relations between project's alternatives")
+    has_results = models.BooleanField(default=False, help_text="Are results for this category calculated?")
     parent = models.ForeignKey("self", null=True, blank=True, on_delete=models.CASCADE, related_name="children")
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="categories")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -162,11 +161,11 @@ class PairwiseComparison(models.Model):
         ordering = ("id",)
 
 
-class Percentage(models.Model):
-    position = models.IntegerField(help_text="Position of the percentage")
+class AcceptabilityIndex(models.Model):
+    position = models.IntegerField(help_text="Position of the index")
     percent = models.FloatField(help_text="How many percent of cases was the alternative in this position?")
-    category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name="percentages")
-    alternative = models.ForeignKey(Alternative, on_delete=models.CASCADE, related_name="percentages")
+    category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name="acceptability_indices")
+    alternative = models.ForeignKey(Alternative, on_delete=models.CASCADE, related_name="acceptability_indices")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -174,11 +173,11 @@ class Percentage(models.Model):
         ordering = ("id",)
 
 
-class AcceptabilityIndex(models.Model):
+class PairwiseWinning(models.Model):
     percentage = models.FloatField(help_text="In how many percent of cases is alternative_1 better than alternative_2?")
-    category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name="acceptability_indices")
-    alternative_1 = models.ForeignKey(Alternative, on_delete=models.CASCADE, related_name="acceptability_indices_1")
-    alternative_2 = models.ForeignKey(Alternative, on_delete=models.CASCADE, related_name="acceptability_indices_2")
+    category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name="pairwise_winnings")
+    alternative_1 = models.ForeignKey(Alternative, on_delete=models.CASCADE, related_name="pairwise_winnings_1")
+    alternative_2 = models.ForeignKey(Alternative, on_delete=models.CASCADE, related_name="pairwise_winnings_2")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -205,6 +204,27 @@ class Inconsistency(models.Model):
     data = models.TextField(help_text="Data of the inconsistency")
     type = models.CharField(choices=TYPE_CHOICES)
     category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name="inconsistencies")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ("category", "group", "id",)
+
+
+class Relation(models.Model):
+    NECESSARY = 'necessary'
+    POSSIBLE = 'possible'
+
+    TYPE_CHOICES = [
+        (NECESSARY, 'Necessary'),
+        (POSSIBLE, 'Possible')
+    ]
+    type = models.CharField(choices=TYPE_CHOICES)
+    category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name="relations")
+    alternative_1 = models.ForeignKey(Alternative, on_delete=models.CASCADE, related_name="relations_1")
+    alternative_2 = models.ForeignKey(Alternative, on_delete=models.CASCADE, related_name="relations_2")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("category", "alternative_1", "alternative_2",)

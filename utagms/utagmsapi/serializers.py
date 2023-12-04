@@ -1,22 +1,11 @@
 from django.contrib.auth.hashers import make_password
 from rest_framework import serializers
-from rest_framework.exceptions import ValidationError, MethodNotAllowed
+from rest_framework.exceptions import MethodNotAllowed, ValidationError
 
 from utagmsapi import models
-from utagmsapi.models import (
-    Performance,
-    Criterion,
-    Alternative,
-    PreferenceIntensity,
-    PairwiseComparison,
-    FunctionPoint,
-    CriterionCategory,
-    Category,
-    Ranking,
-    Percentage,
-    AcceptabilityIndex,
-    Inconsistency
-)
+from utagmsapi.models import (AcceptabilityIndex, Alternative, Category, Criterion, CriterionCategory, FunctionPoint,
+                              Inconsistency, PairwiseComparison, PairwiseWinning, Performance, PreferenceIntensity,
+                              Ranking, Relation)
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -87,8 +76,9 @@ class CategorySerializerWhole(serializers.ModelSerializer):
     function_points = serializers.SerializerMethodField()
     pairwise_comparisons = serializers.SerializerMethodField()
     rankings = serializers.SerializerMethodField()
-    percentages = serializers.SerializerMethodField()
     acceptability_indices = serializers.SerializerMethodField()
+    pairwise_winnings = serializers.SerializerMethodField()
+    relations = serializers.SerializerMethodField()
     inconsistencies = serializers.SerializerMethodField()
 
     def get_criterion_categories(self, obj):
@@ -107,13 +97,17 @@ class CategorySerializerWhole(serializers.ModelSerializer):
         rankings = Ranking.objects.filter(category=obj)
         return RankingSerializer(rankings, many=True).data
 
-    def get_percentages(self, obj):
-        percentages = Percentage.objects.filter(category=obj)
-        return PercentageSerializer(percentages, many=True).data
-
     def get_acceptability_indices(self, obj):
         acceptability_indices = AcceptabilityIndex.objects.filter(category=obj)
         return AcceptabilityIndexSerializer(acceptability_indices, many=True).data
+
+    def get_pairwise_winnings(self, obj):
+        pairwise_winnings = PairwiseWinning.objects.filter(category=obj)
+        return PairwiseWinningSerializer(pairwise_winnings, many=True).data
+
+    def get_relations(self, obj):
+        relations = Relation.objects.filter(category=obj)
+        return RelationSerializer(relations, many=True).data
 
     def get_inconsistencies(self, obj):
         inconsistencies = Inconsistency.objects.filter(category=obj)
@@ -292,15 +286,21 @@ class RankingSerializer(serializers.ModelSerializer):
         super().save(**kwargs)
 
 
-class PercentageSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = models.Percentage
-        exclude = ['category']
-
-
 class AcceptabilityIndexSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.AcceptabilityIndex
+        exclude = ['category']
+
+
+class PairwiseWinningSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.PairwiseWinning
+        exclude = ['category']
+
+
+class RelationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.Relation
         exclude = ['category']
 
 
