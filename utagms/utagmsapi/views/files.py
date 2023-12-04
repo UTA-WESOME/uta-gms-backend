@@ -18,6 +18,7 @@ from ..models import (
     Criterion,
     Alternative,
     Performance,
+    Ranking,
     Category
 )
 from ..permissions import (
@@ -363,7 +364,7 @@ class XmlExport(APIView):
     def get(self, request, *args, **kwargs):
         project_id = self.kwargs.get("project_pk")
         xml_files = ["criteria.xml", "criteria_scales.xml", "criteria_segments.xml",
-                     "alternatives.xml", "performance_table.xml"]
+                     "alternatives.xml", "alterantives_ranks.xml", "performance_table.xml"]
         xml_trees = []
 
         # criteria.xml
@@ -417,6 +418,23 @@ class XmlExport(APIView):
             type_.text = "real"
             active = etree.SubElement(alternative_element, "active")
             active.text = "true"
+        xml_trees.append(etree.ElementTree(root))
+
+        # alternatives_ranks.xml
+        root = etree.Element("xmcda", xmlns="http://www.decision-deck.org/2021/XMCDA-4.0.0")
+        alternatives = Alternative.objects.filter(project=project_id)
+        alternatives_values_element = etree.SubElement(root, "alternativesValues")
+        for alternative in alternatives:
+            ranking = Ranking.objects.get(alternative=alternative)
+            if ranking.reference_ranking != 0:
+                alternative_values_element = etree.SubElement(alternatives_values_element, "alternativeValues")
+                alternative_id_element = etree.SubElement(alternative_values_element, "alternativeID")
+                alternative_id_element.text = str(alternative.id)
+
+                values_element = etree.SubElement(alternative_values_element, "values")
+                value_element = etree.SubElement(values_element, "value")
+                integer_element = etree.SubElement(value_element, "integer")
+                integer_element.text = str(ranking.reference_ranking)
         xml_trees.append(etree.ElementTree(root))
 
         # performanceTable.xml
