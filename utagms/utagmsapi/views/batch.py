@@ -1464,9 +1464,6 @@ class CategoryResults(APIView):
             inconsistencies = e.data
             EngineConverter.insert_inconsistencies(category_root, inconsistencies)
         else:
-
-            print(f"{necessary=}")
-            print(f"{possible=}")
             # updating acceptability indices
             acceptability_indices = AcceptabilityIndex.objects.filter(category=category_root)
             acceptability_indices.delete()
