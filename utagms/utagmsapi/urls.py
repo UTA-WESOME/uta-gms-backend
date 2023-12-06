@@ -1,35 +1,28 @@
 from django.urls import path
 
-from .views import (
-    ProjectList,
-    ProjectDetail,
-    CriterionList,
-    CriterionDetail,
-    AlternativeList,
+from utagmsapi.views.batch import CategoryResults, ProjectBatch
+from utagmsapi.views.files import CsvExport, FileUpload, XmlExport
+from utagmsapi.views.rest import (
     AlternativeDetail,
-    PerformanceList,
-    PerformanceDetail,
-    RegisterView,
-    LoginView,
-    UserView,
-    LogoutView,
-    RefreshView,
-    ProjectBatch,
-    PreferenceIntensityList,
-    PreferenceIntensityDetail,
-    FileUpload,
-    PairwiseComparisonList,
-    PairwiseComparisonDetail,
-    CategoryList,
+    AlternativeList,
     CategoryDetail,
-    CategoryResults,
-    CriterionCategoryList,
+    CategoryList,
     CriterionCategoryDetail,
-    RankingList,
+    CriterionCategoryList,
+    CriterionDetail,
+    CriterionList,
+    PairwiseComparisonDetail,
+    PairwiseComparisonList,
+    PerformanceDetail,
+    PerformanceList,
+    PreferenceIntensityDetail,
+    PreferenceIntensityList,
+    ProjectDetail,
+    ProjectList,
     RankingDetail,
-    CsvExport,
-    XmlExport,
+    RankingList
 )
+from utagmsapi.views.user import LoginView, LogoutView, RefreshView, RegisterView, UserView
 
 urlpatterns = [
     path('register', RegisterView.as_view()),

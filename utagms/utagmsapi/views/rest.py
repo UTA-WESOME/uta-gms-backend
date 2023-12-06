@@ -2,38 +2,38 @@ from rest_framework import generics
 
 from utagmsapi.utils.jwt import get_user_from_jwt
 from ..models import (
-    Project,
-    Criterion,
     Alternative,
+    Category,
+    Criterion,
+    CriterionCategory,
+    PairwiseComparison,
     Performance,
     PreferenceIntensity,
-    PairwiseComparison,
-    Category,
-    CriterionCategory,
+    Project,
     Ranking
 )
 from ..permissions import (
-    IsOwnerOfProject,
     IsLogged,
-    IsOwnerOfCriterion,
     IsOwnerOfAlternative,
+    IsOwnerOfCategory,
+    IsOwnerOfCriterion,
+    IsOwnerOfCriterionCategory,
+    IsOwnerOfPairwiseComparison,
     IsOwnerOfPerformance,
     IsOwnerOfPreferenceIntensity,
-    IsOwnerOfPairwiseComparison,
-    IsOwnerOfCategory,
-    IsOwnerOfCriterionCategory,
+    IsOwnerOfProject,
     IsOwnerOfRanking
 )
 from ..serializers import (
-    ProjectSerializer,
-    CriterionSerializer,
     AlternativeSerializer,
+    CategorySerializer,
+    CriterionCategorySerializer,
+    CriterionSerializer,
+    PairwiseComparisonSerializer,
     PerformanceSerializer,
     PerformanceSerializerUpdate,
     PreferenceIntensitySerializer,
-    PairwiseComparisonSerializer,
-    CategorySerializer,
-    CriterionCategorySerializer,
+    ProjectSerializer,
     RankingSerializer
 )
 

@@ -187,13 +187,15 @@ class AcceptabilityIndex(models.Model):
 
 
 class Inconsistency(models.Model):
-    PREFERENCE = 'preference'
-    INDIFFERENCE = 'indifference'
+    PREFERENCE = '>'
+    WEAK_PREFERENCE = '>='
+    INDIFFERENCE = '='
     POSITION = 'position'
     INTENSITY = 'intensity'
 
     TYPE_CHOICES = [
         (PREFERENCE, 'Preference'),
+        (WEAK_PREFERENCE, 'Weak preference'),
         (INDIFFERENCE, 'Indifference'),
         (POSITION, 'Position'),
         (INTENSITY, 'Intensity')

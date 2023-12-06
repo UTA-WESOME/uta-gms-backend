@@ -22,6 +22,25 @@ cd docker/dev-custom-engine
 docker compose up --build
 ```
 
+---
+
+### unit tests
+
+With running container:
+```commandline
+docker exec -it uta_gms_django bash
+python3 manage.py test utagmsapi
+```
+
+---
+
+### ruff
+
+```commandline
+ruff check .
+```
+
+
 ## Database Schema
 
 ![database schema](./uta-gms-backend-ER-diagram.png)
