@@ -463,10 +463,12 @@ class XmlExport(APIView):
         categories = Category.objects.filter(project=project_id)
         for category in categories:
             category_criteria = CriterionCategory.objects.filter(category=category)
-            if not category.has_results or not category_criteria.exists():
+            if not category_criteria.exists():
                 continue
+
             root = etree.Element("xmcda", xmlns="http://www.decision-deck.org/2021/XMCDA-4.0.0")
             criteria_functions_element = etree.SubElement(root, "criteriaFunctions")
+            has_any_data = False
             for category_criterion in category_criteria:
                 criterion_functions_element = etree.SubElement(criteria_functions_element, "criterionFunctions")
                 criterion_id_element = etree.SubElement(criterion_functions_element, "criterionID")
@@ -495,8 +497,11 @@ class XmlExport(APIView):
                     real_element = etree.SubElement(ordinate_element, "real")
                     real_element.text = str(function_points[i + 1].ordinate)
 
-            xml_files.append("value_functions_" + category.name + ".xml")
-            xml_trees.append(etree.ElementTree(root))
+                    has_any_data = True
+
+            if has_any_data:
+                xml_files.append("value_functions_" + category.name + "_" + str(category.id) + ".xml")
+                xml_trees.append(etree.ElementTree(root))
 
         zip_buffer = BytesIO()
         with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
