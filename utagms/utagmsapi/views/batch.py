@@ -1165,6 +1165,28 @@ class EngineConverter:
                 if relation.is_valid():
                     relation.save(category=category_root)
 
+    @staticmethod
+    def update_extreme_ranks(category_root: Category, extreme_ranks: Dict[str, Tuple[int, int]]) -> None:
+        """
+        Update extreme ranking positions for alternatives in the specified category.
+
+        This method updates the extreme best and worst ranking positions for each alternative in the provided dictionary
+        and saves the changes to the database.
+
+        Parameters:
+        -----------
+        category_root : Category
+            The root category for which the extreme rankings are to be updated.
+        extreme_ranks : Dict[str, Tuple[int, int]]
+            A dictionary where keys are alternative IDs, and values are tuples representing extreme best and worst
+            ranking positions.
+        """
+        for key, extreme_positions in extreme_ranks.items():
+            ranking = Ranking.objects.filter(alternative_id=int(key)).filter(category=category_root).first()
+            ranking.extreme_best = extreme_positions[1]
+            ranking.extreme_worst = extreme_positions[0]
+            ranking.save()
+
 
 class ProjectBatch(APIView):
     """
@@ -1451,7 +1473,7 @@ class CategoryResults(APIView):
         # RANKING
         solver = Solver()
         try:
-            ranking, functions, samples, _, necessary, possible = solver.get_representative_value_function_dict(
+            ranking, functions, samples, extreme_ranks, necessary, possible = solver.get_representative_value_function_dict(
                 performance_table_dict=performances,
                 comparisons=comparisons_list,
                 criteria=criteria_uged,
@@ -1476,6 +1498,9 @@ class CategoryResults(APIView):
 
             # updating rankings
             EngineConverter.update_rankings(category_root, ranking)
+
+            # update extreme ranks
+            EngineConverter.update_extreme_ranks(category_root, extreme_ranks)
 
             # updating criterion functions
             criterion_function_points = FunctionPoint.objects.filter(category=category_root)
