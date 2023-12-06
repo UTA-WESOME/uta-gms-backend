@@ -19,7 +19,9 @@ from ..models import (
     Alternative,
     Performance,
     Ranking,
-    Category
+    Category,
+    CriterionCategory,
+    FunctionPoint
 )
 from ..permissions import (
     IsOwnerOfProject
@@ -425,8 +427,8 @@ class XmlExport(APIView):
         alternatives = Alternative.objects.filter(project=project_id)
         alternatives_values_element = etree.SubElement(root, "alternativesValues")
         for alternative in alternatives:
-            ranking = Ranking.objects.get(alternative=alternative)
-            if ranking.reference_ranking != 0:
+            ranking = Ranking.objects.exclude(reference_ranking=0).filter(alternative=alternative).first()
+            if ranking:
                 alternative_values_element = etree.SubElement(alternatives_values_element, "alternativeValues")
                 alternative_id_element = etree.SubElement(alternative_values_element, "alternativeID")
                 alternative_id_element.text = str(alternative.id)
@@ -456,6 +458,45 @@ class XmlExport(APIView):
                 real_element = etree.SubElement(value_element, "real")
                 real_element.text = str(performance.value)
         xml_trees.append(etree.ElementTree(root))
+
+        # value_functions.xml
+        categories = Category.objects.filter(project=project_id)
+        for category in categories:
+            category_criteria = CriterionCategory.objects.filter(category=category)
+            if not category.has_results or not category_criteria.exists():
+                continue
+            root = etree.Element("xmcda", xmlns="http://www.decision-deck.org/2021/XMCDA-4.0.0")
+            criteria_functions_element = etree.SubElement(root, "criteriaFunctions")
+            for category_criterion in category_criteria:
+                criterion_functions_element = etree.SubElement(criteria_functions_element, "criterionFunctions")
+                criterion_id_element = etree.SubElement(criterion_functions_element, "criterionID")
+                criterion_id_element.text = str(category_criterion.criterion.id)
+
+                functions_element = etree.SubElement(criterion_functions_element, "functions")
+                function_element = etree.SubElement(functions_element, "function")
+                piecewise_linear_element = etree.SubElement(function_element, "piecewiseLinear")
+                segment_element = etree.SubElement(piecewise_linear_element, "segment")
+                function_points = list(FunctionPoint.objects.filter(criterion=category_criterion.criterion,
+                                                                    category=category).order_by('abscissa'))
+                for i in range(len(function_points) - 1):
+                    head_element = etree.SubElement(segment_element, "head")
+                    abscissa_element = etree.SubElement(head_element, "abscissa")
+                    real_element = etree.SubElement(abscissa_element, "real")
+                    real_element.text = str(function_points[i].abscissa)
+                    ordinate_element = etree.SubElement(head_element, "ordinate")
+                    real_element = etree.SubElement(ordinate_element, "real")
+                    real_element.text = str(function_points[i].ordinate)
+
+                    tail_element = etree.SubElement(segment_element, "tail")
+                    abscissa_element = etree.SubElement(tail_element, "abscissa")
+                    real_element = etree.SubElement(abscissa_element, "real")
+                    real_element.text = str(function_points[i + 1].abscissa)
+                    ordinate_element = etree.SubElement(tail_element, "ordinate")
+                    real_element = etree.SubElement(ordinate_element, "real")
+                    real_element.text = str(function_points[i + 1].ordinate)
+
+            xml_files.append("value_functions_" + category.name + ".xml")
+            xml_trees.append(etree.ElementTree(root))
 
         zip_buffer = BytesIO()
         with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
