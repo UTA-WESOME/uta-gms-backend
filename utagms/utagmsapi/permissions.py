@@ -1,17 +1,8 @@
 import jwt
 from rest_framework import permissions
 
-from utagmsapi.models import (
-    Project,
-    Criterion,
-    Alternative,
-    Performance,
-    PreferenceIntensity,
-    PairwiseComparison,
-    Category,
-    CriterionCategory, Ranking
-)
-
+from utagmsapi.models import (Alternative, Category, Criterion, CriterionCategory, PairwiseComparison, Performance,
+                              PreferenceIntensity, Project, Ranking)
 from utagmsapi.utils.jwt import get_user_from_jwt
 
 
