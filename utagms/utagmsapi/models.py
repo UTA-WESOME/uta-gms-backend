@@ -79,10 +79,10 @@ class Ranking(models.Model):
                                          help_text="Worst position the alternative can have in the final ranking")
     best_position = models.IntegerField(blank=True, null=True,
                                         help_text="Best position the alternative can have in the final ranking")
-    ranking = models.IntegerField(help_text="Alternative ranking")
+    ranking = models.IntegerField(default=0, help_text="Alternative ranking")
     ranking_value = models.FloatField(default=0.0, help_text="Alternative's final value in the ranking")
-    extreme_worst = models.IntegerField(help_text="Worst possible position the alternative has")
-    extreme_best = models.IntegerField(help_text="Best possible position the alternative has")
+    extreme_worst = models.IntegerField(default=0, help_text="Worst possible position the alternative has")
+    extreme_best = models.IntegerField(default=0, help_text="Best possible position the alternative has")
     category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='rankings')
     alternative = models.ForeignKey(Alternative, on_delete=models.CASCADE, related_name='rankings')
     created_at = models.DateTimeField(auto_now_add=True)
