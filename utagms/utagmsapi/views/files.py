@@ -199,6 +199,7 @@ class FileUpload(APIView):
                 parser = Parser()
                 criterion_dict = parser.get_criterion_dict_xmcda(xml_file)
 
+                criteria_id_dict = {}
                 for criterion in criterion_dict.items():
                     gain = criteria_scales_dict.get(criterion[0], 'max' if criterion[1].gain == 1 else 'min')
                     criterion_data = {
@@ -209,7 +210,8 @@ class FileUpload(APIView):
 
                     criterion_serializer = CriterionSerializer(data=criterion_data)
                     if criterion_serializer.is_valid():
-                        criterion_serializer.save(project=project)
+                        criterion_instance = criterion_serializer.save(project=project)
+                        criteria_id_dict[criterion[0]] = criterion_instance.id
 
                 # categories
                 category = None
@@ -235,14 +237,15 @@ class FileUpload(APIView):
                 if "alternatives" not in ordered_files_dict:
                     return Response({'message': 'Files uploaded successfully'})
 
+                alternatives_id_dict = {}
                 xml_file = ordered_files_dict["alternatives"]
                 current_parsed_file = xml_file.name
                 parser = Parser()
                 alternative_dict = parser.get_alternative_dict_xmcda(xml_file)
 
-                for alternative in alternative_dict.values():
+                for alternative_id, alternative_name in alternative_dict.items():
                     alternative_data = {
-                        'name': alternative,
+                        'name': alternative_name,
                         'reference_ranking': 0,
                         'ranking': 0,
                         'ranking_value': 0,
@@ -250,20 +253,20 @@ class FileUpload(APIView):
 
                     alternative_serializer = AlternativeSerializer(data=alternative_data)
                     if alternative_serializer.is_valid():
-                        alternative_serializer.save(project=project)
+                        alternative_instance = alternative_serializer.save(project=project)
+                        alternatives_id_dict[alternative_id] = alternative_instance.id
 
                 # rankings
                 xml_file = ordered_files_dict["alternativesValues"]
                 current_parsed_file = xml_file.name
                 alternative_ranking_dict = BackendParser.get_alternative_ranking_dict_xmcda(xml_file)
 
-                alternatives = Alternative.objects.all().filter(project=project)
-                for alternative in alternative_dict.items():
+                for alternative_id in alternative_dict.keys():
                     ranking_serializer = RankingSerializer(data={
-                        'reference_ranking': alternative_ranking_dict.get(alternative[0], 0),
+                        'reference_ranking': alternative_ranking_dict.get(alternative_id, 0),
                         'ranking': 0,
                         'ranking_value': 0,
-                        'alternative': alternatives.get(name=alternative[1]).id
+                        'alternative': alternatives_id_dict[alternative_id]
                     })
                     if ranking_serializer.is_valid():
                         ranking_serializer.save(category=category)
@@ -278,10 +281,10 @@ class FileUpload(APIView):
                     criteria = Criterion.objects.all().filter(project=project)
                     alternatives = Alternative.objects.all().filter(project=project)
                     for alternative_id, alternative_data in performance_table_dict.items():
-                        alternative = alternatives.get(name=alternative_dict.get(alternative_id))
+                        alternative = alternatives.get(id=alternatives_id_dict[alternative_id])
 
                         for criterion_id, value in alternative_data.items():
-                            criterion = criteria.get(name=criterion_dict.get(criterion_id).criterion_id)
+                            criterion = criteria.get(id=criteria_id_dict[criterion_id])
                             performance_data = {
                                 'criterion': criterion.pk,
                                 'value': value,
@@ -293,11 +296,11 @@ class FileUpload(APIView):
                 else:
                     criteria = Criterion.objects.all().filter(project=project)
                     alternatives = Alternative.objects.all().filter(project=project)
-                    for alternative_name in alternative_dict.values():
-                        alternative = alternatives.get(name=alternative_name)
+                    for alternative_id in alternative_dict.keys():
+                        alternative = alternatives.get(id=alternatives_id_dict[alternative_id])
 
-                        for criterion_element in criterion_dict.values():
-                            criterion = criteria.get(name=criterion_element.criterion_id)
+                        for criterion_id, criterion_element in criterion_dict.items():
+                            criterion = criteria.get(id=criteria_id_dict[criterion_id])
                             performance_data = {
                                 'criterion': criterion.pk,
                                 'value': 0,
