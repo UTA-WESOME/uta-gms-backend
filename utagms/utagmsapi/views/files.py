@@ -161,7 +161,7 @@ class FileUpload(APIView):
                 if match_second and "xmcda" not in second_line:
                     uploaded_file_text.seek(0)
                     ordered_files_dict[match_second.group(1)] = uploaded_file_text
-                if match_third:
+                if match_third and "xmcda" not in third_line:
                     uploaded_file_text.seek(0)
                     ordered_files_dict[match_third.group(1)] = uploaded_file_text
 
@@ -366,7 +366,7 @@ class XmlExport(APIView):
     def get(self, request, *args, **kwargs):
         project_id = self.kwargs.get("project_pk")
         xml_files = ["criteria.xml", "criteria_scales.xml", "criteria_segments.xml",
-                     "alternatives.xml", "alterantives_ranks.xml", "performance_table.xml"]
+                     "alternatives.xml", "alternatives_ranks.xml", "performance_table.xml"]
         xml_trees = []
 
         # criteria.xml
@@ -506,7 +506,7 @@ class XmlExport(APIView):
         zip_buffer = BytesIO()
         with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
             for name, tree in zip(xml_files, xml_trees):
-                xml_content = etree.tostring(tree, pretty_print=True, xml_declaration=True, encoding="UTF-8")
+                xml_content = etree.tostring(tree, pretty_print=True, xml_declaration=False, encoding="UTF-8")
                 zip_file.writestr(name, xml_content)
 
         response = HttpResponse(zip_buffer.getvalue(), content_type="application/zip")
