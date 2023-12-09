@@ -352,8 +352,7 @@ class XmlExport(APIView):
 
     def get(self, request, *args, **kwargs):
         project_id = self.kwargs.get("project_pk")
-        xml_files = ["criteria.xml", "criteria_scales.xml", "criteria_segments.xml",
-                     "alternatives.xml", "alternatives_ranks.xml", "performance_table.xml"]
+        xml_files = []
         xml_trees = []
 
         # criteria.xml
@@ -365,6 +364,7 @@ class XmlExport(APIView):
                                                  name=criterion.name)
             active = etree.SubElement(criterion_element, "active")
             active.text = "true"
+        xml_files.append("criteria.xml")
         xml_trees.append(etree.ElementTree(root))
 
         # criteria_scales.xml
@@ -380,6 +380,7 @@ class XmlExport(APIView):
             quantitative_element = etree.SubElement(scale_element, "quantitative")
             preference_direction_element = etree.SubElement(quantitative_element, "preferenceDirection")
             preference_direction_element.text = "max" if criterion.gain else "min"
+        xml_files.append("criteria_scales.xml")
         xml_trees.append(etree.ElementTree(root))
 
         # criteria_segments.xml
@@ -394,6 +395,7 @@ class XmlExport(APIView):
             value_element = etree.SubElement(values_element, "value")
             integer_element = etree.SubElement(value_element, "integer")
             integer_element.text = str(criterion.linear_segments)
+        xml_files.append("criteria_segments.xml")
         xml_trees.append(etree.ElementTree(root))
 
         # alternatives.xml
@@ -407,24 +409,31 @@ class XmlExport(APIView):
             type_.text = "real"
             active = etree.SubElement(alternative_element, "active")
             active.text = "true"
+        xml_files.append("alternatives.xml")
         xml_trees.append(etree.ElementTree(root))
 
         # alternatives_ranks.xml
-        root = etree.Element("xmcda", xmlns="http://www.decision-deck.org/2021/XMCDA-4.0.0")
-        alternatives = Alternative.objects.filter(project=project_id)
-        alternatives_values_element = etree.SubElement(root, "alternativesValues")
-        for alternative in alternatives:
-            ranking = Ranking.objects.exclude(reference_ranking=0).filter(alternative=alternative).first()
-            if ranking:
+        categories = Category.objects.filter(project=project_id)
+        for category in categories:
+            has_any_data = False
+            category_rankings = Ranking.objects.exclude(reference_ranking=0).filter(category=category)
+            root = etree.Element("xmcda", xmlns="http://www.decision-deck.org/2021/XMCDA-4.0.0")
+            alternatives_values_element = etree.SubElement(root, "alternativesValues")
+            for category_ranking in category_rankings:
                 alternative_values_element = etree.SubElement(alternatives_values_element, "alternativeValues")
                 alternative_id_element = etree.SubElement(alternative_values_element, "alternativeID")
-                alternative_id_element.text = str(alternative.id)
+                alternative_id_element.text = str(category_ranking.alternative.id)
 
                 values_element = etree.SubElement(alternative_values_element, "values")
                 value_element = etree.SubElement(values_element, "value")
                 integer_element = etree.SubElement(value_element, "integer")
-                integer_element.text = str(ranking.reference_ranking)
-        xml_trees.append(etree.ElementTree(root))
+                integer_element.text = str(category_ranking.reference_ranking)
+
+                has_any_data = True
+
+            if has_any_data:
+                xml_files.append("alternatives_ranks_" + category.name + "_" + str(category.id) + ".xml")
+                xml_trees.append(etree.ElementTree(root))
 
         # performanceTable.xml
         root = etree.Element("xmcda", xmlns="http://www.decision-deck.org/2021/XMCDA-4.0.0")
@@ -444,6 +453,7 @@ class XmlExport(APIView):
                 value_element = etree.SubElement(values_element, "value")
                 real_element = etree.SubElement(value_element, "real")
                 real_element.text = str(performance.value)
+        xml_files.append("performanceTable.xml")
         xml_trees.append(etree.ElementTree(root))
 
         # value_functions.xml
