@@ -42,7 +42,6 @@ from ..utils.parser import Parser as BackendParser
 class FileUpload(APIView):
     permission_classes = [IsOwnerOfProject]
 
-    @transaction.atomic
     def post(self, request, *args, **kwargs):
         uploaded_files = request.FILES.getlist('file')
 
@@ -170,158 +169,146 @@ class FileUpload(APIView):
                 "alternatives" not in ordered_files_dict and "performanceTable" in ordered_files_dict):
             return Response({'message': 'Wrong files configuration'}, status=status.HTTP_400_BAD_REQUEST)
 
-        curr_alternatives = Alternative.objects.filter(project=project)
-        curr_criteria = Criterion.objects.filter(project=project)
-        curr_categories = Category.objects.filter(project=project)
-        curr_alternatives.delete()
-        curr_criteria.delete()
-        curr_categories.delete()
-
-        # criteria scales
-        criteria_scales_dict = {}
-        if "criteriaScales" in ordered_files_dict:
-            xml_file = ordered_files_dict["criteriaScales"]
-            try:
-                criteria_scales_dict = BackendParser.get_criterion_scales_dict_xmcda(xml_file)
-            except Exception:
-                return Response({'message': 'Incorrect file: {}'.format(xml_file.name)},
-                                status=status.HTTP_422_UNPROCESSABLE_ENTITY)
-
-        # criteria segments
-        criteria_segments_dict = {}
-        if "criteriaValues" in ordered_files_dict:
-            xml_file = ordered_files_dict["criteriaValues"]
-            try:
-                criteria_segments_dict = BackendParser.get_criterion_segments_dict_xmcda(xml_file)
-            except Exception:
-                return Response({'message': 'Incorrect file: {}'.format(xml_file.name)},
-                                status=status.HTTP_422_UNPROCESSABLE_ENTITY)
-
-        # criteria
-        xml_file = ordered_files_dict["criteria"]
+        current_parsed_file = "no file identified"
         try:
-            parser = Parser()
-            criterion_dict = parser.get_criterion_dict_xmcda(xml_file)
-        except Exception:
-            return Response({'message': 'Incorrect file: {}'.format(xml_file.name)},
-                            status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+            with transaction.atomic():
+                curr_alternatives = Alternative.objects.filter(project=project)
+                curr_criteria = Criterion.objects.filter(project=project)
+                curr_categories = Category.objects.filter(project=project)
+                curr_alternatives.delete()
+                curr_criteria.delete()
+                curr_categories.delete()
 
-        for criterion in criterion_dict.items():
-            gain = criteria_scales_dict.get(criterion[0], 'max' if criterion[1].gain == 1 else 'min')
-            criterion_data = {
-                'name': criterion[1].criterion_id,
-                'gain': 1 if gain == 'max' else 0,
-                'linear_segments': criteria_segments_dict.get(criterion[0], 0)
-            }
+                # criteria scales
+                criteria_scales_dict = {}
+                if "criteriaScales" in ordered_files_dict:
+                    xml_file = ordered_files_dict["criteriaScales"]
+                    current_parsed_file = xml_file.name
+                    criteria_scales_dict = BackendParser.get_criterion_scales_dict_xmcda(xml_file)
 
-            criterion_serializer = CriterionSerializer(data=criterion_data)
-            if criterion_serializer.is_valid():
-                criterion_serializer.save(project=project)
+                # criteria segments
+                criteria_segments_dict = {}
+                if "criteriaValues" in ordered_files_dict:
+                    xml_file = ordered_files_dict["criteriaValues"]
+                    current_parsed_file = xml_file.name
+                    criteria_segments_dict = BackendParser.get_criterion_segments_dict_xmcda(xml_file)
 
-        # categories
-        category = None
-        root_category_serializer = CategorySerializer(data={
-            'name': 'General',
-            'color': 'teal.500',
-            'active': True,
-            'hasse_diagram': {},
-            'parent': None
-        })
-        if root_category_serializer.is_valid():
-            category = root_category_serializer.save(project=project)
-
-        # criterion to category
-        for criterion in Criterion.objects.filter(project=project):
-            cc_serializer = CriterionCategorySerializer(data={
-                'criterion': criterion.id
-            })
-            if cc_serializer.is_valid():
-                cc_serializer.save(category=category)
-
-        # alternatives
-        if "alternatives" not in ordered_files_dict:
-            return Response({'message': 'Files uploaded successfully'})
-
-        xml_file = ordered_files_dict["alternatives"]
-        try:
-            parser = Parser()
-            alternative_dict = parser.get_alternative_dict_xmcda(xml_file)
-        except Exception:
-            return Response({'message': 'Incorrect file: {}'.format(xml_file.name)},
-                            status=status.HTTP_422_UNPROCESSABLE_ENTITY)
-
-        for alternative in alternative_dict.values():
-            alternative_data = {
-                'name': alternative,
-                'reference_ranking': 0,
-                'ranking': 0,
-                'ranking_value': 0,
-            }
-
-            alternative_serializer = AlternativeSerializer(data=alternative_data)
-            if alternative_serializer.is_valid():
-                alternative_serializer.save(project=project)
-
-        # rankings
-        xml_file = ordered_files_dict["alternativesValues"]
-        try:
-            alternative_ranking_dict = BackendParser.get_alternative_ranking_dict_xmcda(xml_file)
-        except Exception:
-            return Response({'message': 'Incorrect file: {}'.format(xml_file.name)},
-                            status=status.HTTP_422_UNPROCESSABLE_ENTITY)
-
-        alternatives = Alternative.objects.all().filter(project=project)
-        for alternative in alternative_dict.items():
-            ranking_serializer = RankingSerializer(data={
-                'reference_ranking': alternative_ranking_dict.get(alternative[0], 0),
-                'ranking': 0,
-                'ranking_value': 0,
-                'alternative': alternatives.get(name=alternative[1]).id
-            })
-            if ranking_serializer.is_valid():
-                ranking_serializer.save(category=category)
-
-        # performance table
-        if "performanceTable" in ordered_files_dict:
-            xml_file = ordered_files_dict["performanceTable"]
-            try:
+                # criteria
+                xml_file = ordered_files_dict["criteria"]
+                current_parsed_file = xml_file.name
                 parser = Parser()
-                performance_table_dict = parser.get_performance_table_dict_xmcda(xml_file)
-            except Exception:
-                return Response({'message': 'Incorrect file: {}'.format(xml_file.name)},
-                                status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+                criterion_dict = parser.get_criterion_dict_xmcda(xml_file)
 
-            criteria = Criterion.objects.all().filter(project=project)
-            alternatives = Alternative.objects.all().filter(project=project)
-            for alternative_id, alternative_data in performance_table_dict.items():
-                alternative = alternatives.get(name=alternative_dict.get(alternative_id))
-
-                for criterion_id, value in alternative_data.items():
-                    criterion = criteria.get(name=criterion_dict.get(criterion_id).criterion_id)
-                    performance_data = {
-                        'criterion': criterion.pk,
-                        'value': value,
+                for criterion in criterion_dict.items():
+                    gain = criteria_scales_dict.get(criterion[0], 'max' if criterion[1].gain == 1 else 'min')
+                    criterion_data = {
+                        'name': criterion[1].criterion_id,
+                        'gain': 1 if gain == 'max' else 0,
+                        'linear_segments': criteria_segments_dict.get(criterion[0], 0)
                     }
-                    performance_serializer = PerformanceSerializer(data=performance_data)
-                    if performance_serializer.is_valid():
-                        performance_serializer.save(alternative=alternative)
 
-        else:
-            criteria = Criterion.objects.all().filter(project=project)
-            alternatives = Alternative.objects.all().filter(project=project)
-            for alternative_name in alternative_dict.values():
-                alternative = alternatives.get(name=alternative_name)
+                    criterion_serializer = CriterionSerializer(data=criterion_data)
+                    if criterion_serializer.is_valid():
+                        criterion_serializer.save(project=project)
 
-                for criterion_element in criterion_dict.values():
-                    criterion = criteria.get(name=criterion_element.criterion_id)
-                    performance_data = {
-                        'criterion': criterion.pk,
-                        'value': 0,
+                # categories
+                category = None
+                root_category_serializer = CategorySerializer(data={
+                    'name': 'General',
+                    'color': 'teal.500',
+                    'active': True,
+                    'hasse_diagram': {},
+                    'parent': None
+                })
+                if root_category_serializer.is_valid():
+                    category = root_category_serializer.save(project=project)
+
+                # criterion to category
+                for criterion in Criterion.objects.filter(project=project):
+                    cc_serializer = CriterionCategorySerializer(data={
+                        'criterion': criterion.id
+                    })
+                    if cc_serializer.is_valid():
+                        cc_serializer.save(category=category)
+
+                # alternatives
+                if "alternatives" not in ordered_files_dict:
+                    return Response({'message': 'Files uploaded successfully'})
+
+                xml_file = ordered_files_dict["alternatives"]
+                current_parsed_file = xml_file.name
+                parser = Parser()
+                alternative_dict = parser.get_alternative_dict_xmcda(xml_file)
+
+                for alternative in alternative_dict.values():
+                    alternative_data = {
+                        'name': alternative,
+                        'reference_ranking': 0,
                         'ranking': 0,
+                        'ranking_value': 0,
                     }
-                    performance_serializer = PerformanceSerializer(data=performance_data)
-                    if performance_serializer.is_valid():
-                        performance_serializer.save(alternative=alternative)
+
+                    alternative_serializer = AlternativeSerializer(data=alternative_data)
+                    if alternative_serializer.is_valid():
+                        alternative_serializer.save(project=project)
+
+                # rankings
+                xml_file = ordered_files_dict["alternativesValues"]
+                current_parsed_file = xml_file.name
+                alternative_ranking_dict = BackendParser.get_alternative_ranking_dict_xmcda(xml_file)
+
+                alternatives = Alternative.objects.all().filter(project=project)
+                for alternative in alternative_dict.items():
+                    ranking_serializer = RankingSerializer(data={
+                        'reference_ranking': alternative_ranking_dict.get(alternative[0], 0),
+                        'ranking': 0,
+                        'ranking_value': 0,
+                        'alternative': alternatives.get(name=alternative[1]).id
+                    })
+                    if ranking_serializer.is_valid():
+                        ranking_serializer.save(category=category)
+
+                # performance table
+                if "performanceTable" in ordered_files_dict:
+                    xml_file = ordered_files_dict["performanceTable"]
+                    current_parsed_file = xml_file.name
+                    parser = Parser()
+                    performance_table_dict = parser.get_performance_table_dict_xmcda(xml_file)
+
+                    criteria = Criterion.objects.all().filter(project=project)
+                    alternatives = Alternative.objects.all().filter(project=project)
+                    for alternative_id, alternative_data in performance_table_dict.items():
+                        alternative = alternatives.get(name=alternative_dict.get(alternative_id))
+
+                        for criterion_id, value in alternative_data.items():
+                            criterion = criteria.get(name=criterion_dict.get(criterion_id).criterion_id)
+                            performance_data = {
+                                'criterion': criterion.pk,
+                                'value': value,
+                            }
+                            performance_serializer = PerformanceSerializer(data=performance_data)
+                            if performance_serializer.is_valid():
+                                performance_serializer.save(alternative=alternative)
+
+                else:
+                    criteria = Criterion.objects.all().filter(project=project)
+                    alternatives = Alternative.objects.all().filter(project=project)
+                    for alternative_name in alternative_dict.values():
+                        alternative = alternatives.get(name=alternative_name)
+
+                        for criterion_element in criterion_dict.values():
+                            criterion = criteria.get(name=criterion_element.criterion_id)
+                            performance_data = {
+                                'criterion': criterion.pk,
+                                'value': 0,
+                                'ranking': 0,
+                            }
+                            performance_serializer = PerformanceSerializer(data=performance_data)
+                            if performance_serializer.is_valid():
+                                performance_serializer.save(alternative=alternative)
+        except Exception:
+            return Response({'message': 'Incorrect file: {}'.format(current_parsed_file)},
+                            status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
         return Response({'message': 'Files uploaded successfully'})
 
