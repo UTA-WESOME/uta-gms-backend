@@ -1,8 +1,0 @@
-name: uta-gms-backend
-services:
-  - dockerfile_path: docker/prod/backend.dockerfile
-    github:
-      branch: master
-      deploy_on_push: true
-      repo: UTA-WESOME/uta-gms-backend
-    name: uta-gms-backend
