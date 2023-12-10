@@ -52,12 +52,22 @@ class LoginView(APIView):
         }
         refresh_token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
 
-        response = Response({
-            'message': 'authenticated'
-        })
-        response.set_cookie(key='access_token', value=token, httponly=True)
-        response.set_cookie(key='refresh_token', value=refresh_token, httponly=True,
-                            max_age=datetime.timedelta(days=30))
+        response = Response({'message': 'authenticated'})
+        response.set_cookie(
+            key='access_token',
+            value=token,
+            httponly=True,
+            secure=False if settings.DEBUG else True,
+            samesite='lax' if settings.DEBUG else 'none'
+        )
+        response.set_cookie(
+            key='refresh_token',
+            value=refresh_token,
+            httponly=True,
+            max_age=datetime.timedelta(days=30),
+            secure=False if settings.DEBUG else True,
+            samesite='lax' if settings.DEBUG else 'none'
+        )
 
         return response
 
@@ -108,12 +118,22 @@ class RefreshView(APIView):
         refresh_token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
 
         # create the response with tokens in cookies
-        response = Response({
-            'message': 'authenticated'
-        })
-        response.set_cookie(key='access_token', value=token, httponly=True)
-        response.set_cookie(key='refresh_token', value=refresh_token, httponly=True,
-                            max_age=datetime.timedelta(days=30))
+        response = Response({'message': 'authenticated'})
+        response.set_cookie(
+            key='access_token',
+            value=token,
+            httponly=True,
+            secure=False if settings.DEBUG else True,
+            samesite='lax' if settings.DEBUG else 'none'
+        )
+        response.set_cookie(
+            key='refresh_token',
+            value=refresh_token,
+            httponly=True,
+            max_age=datetime.timedelta(days=30),
+            secure=False if settings.DEBUG else True,
+            samesite='lax' if settings.DEBUG else 'none'
+        )
         return response
 
 
