@@ -27,7 +27,7 @@ class Parser:
         return criterion_scales_dict
 
     @staticmethod
-    def get_criterion_segments_dict_xmcda(xmcda_file: _io.TextIOWrapper) -> Dict[str, str]:
+    def get_criterion_segments_dict_xmcda(xmcda_file: _io.TextIOWrapper) -> Dict[str, int]:
         """
         Method responsible for getting dictionary of criteria linear segments
 
@@ -47,3 +47,25 @@ class Parser:
             criterion_values_dict[criterion_id] = linear_segments
 
         return criterion_values_dict
+
+    @staticmethod
+    def get_alternative_ranking_dict_xmcda(xmcda_file: _io.TextIOWrapper) -> Dict[str, int]:
+        """
+        Method responsible for getting dictionary of alternatives ranking
+
+        :param xmcda_file: XMCDA file
+
+        :return: Dictionary of ids and position in ranking of alternatives ex. ['id1': 1,'id2': 2,'id3': 1]
+        """
+        xmcda_data = xmcda_file.read()
+        root = etree.fromstring(xmcda_data)
+        ns = {'xmcda': 'http://www.decision-deck.org/2021/XMCDA-4.0.0'}
+        xpath = "//xmcda:alternativesValues/xmcda:alternativeValues"
+
+        alternative_ranking_dict = {}
+        for alternative_values in root.xpath(xpath, namespaces=ns):
+            alternative_id = alternative_values.find("xmcda:alternativeID", namespaces=ns).text
+            rank = alternative_values.find(".//xmcda:integer", namespaces=ns).text
+            alternative_ranking_dict[alternative_id] = int(rank)
+
+        return alternative_ranking_dict
