@@ -11,4 +11,4 @@ sqlparse==0.4.4
 typing_extensions==4.7.1
 tzdata==2023.3
 django-cors-headers==4.2.0
-uta-gms-engine==0.0.26
+uta-gms-engine==0.0.27
