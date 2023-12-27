@@ -32,6 +32,7 @@ class Category(models.Model):
     color = models.CharField(max_length=15, help_text="Color of the category")
     active = models.BooleanField(default=True, help_text="Should the category be used in calculating results?")
     has_results = models.BooleanField(default=False, help_text="Are results for this category calculated?")
+    sampler_error = models.CharField(null=True, blank=True, help_text="Explanation of the sampler error")
     parent = models.ForeignKey("self", null=True, blank=True, on_delete=models.CASCADE, related_name="children")
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="categories")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -75,14 +76,14 @@ class Alternative(models.Model):
 
 class Ranking(models.Model):
     reference_ranking = models.IntegerField(blank=True, null=True, help_text="Alternative reference ranking")
-    worst_position = models.IntegerField(blank=True, null=True,
-                                         help_text="Worst position the alternative can have in the final ranking")
-    best_position = models.IntegerField(blank=True, null=True,
-                                        help_text="Best position the alternative can have in the final ranking")
+    worst_position = models.IntegerField(blank=True, null=True, help_text="Worst position the alternative can have in the final ranking")
+    best_position = models.IntegerField(blank=True, null=True, help_text="Best position the alternative can have in the final ranking")
     ranking = models.IntegerField(default=0, help_text="Alternative ranking")
     ranking_value = models.FloatField(default=0.0, help_text="Alternative's final value in the ranking")
-    extreme_worst = models.IntegerField(default=0, help_text="Worst possible position the alternative has")
-    extreme_best = models.IntegerField(default=0, help_text="Best possible position the alternative has")
+    extreme_pessimistic_worst = models.IntegerField(default=0, help_text="Worst possible position the alternative has using pessimistic approach")
+    extreme_pessimistic_best = models.IntegerField(default=0, help_text="Best possible position the alternative has using pessimistic approach")
+    extreme_optimistic_worst = models.IntegerField(default=0, help_text="Worst possible position the alternative has using optimistic approach")
+    extreme_optimistic_best = models.IntegerField(default=0, help_text="Best possible position the alternative has using optimistic approach")
     category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='rankings')
     alternative = models.ForeignKey(Alternative, on_delete=models.CASCADE, related_name='rankings')
     created_at = models.DateTimeField(auto_now_add=True)
@@ -176,7 +177,7 @@ class AcceptabilityIndex(models.Model):
 
 
 class PairwiseWinning(models.Model):
-    percentage = models.FloatField(help_text="In how many percent of cases is alternative_1 better than alternative_2?")
+    percent = models.FloatField(help_text="In how many percent of cases is alternative_1 better than alternative_2?")
     category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name="pairwise_winnings")
     alternative_1 = models.ForeignKey(Alternative, on_delete=models.CASCADE, related_name="pairwise_winnings_1")
     alternative_2 = models.ForeignKey(Alternative, on_delete=models.CASCADE, related_name="pairwise_winnings_2")

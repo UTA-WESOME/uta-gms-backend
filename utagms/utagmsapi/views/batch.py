@@ -33,6 +33,7 @@ from ..serializers import (
     FunctionPointSerializer,
     InconsistencySerializer,
     PairwiseComparisonSerializer,
+    PairwiseWinningSerializer,
     PerformanceSerializer,
     PerformanceSerializerUpdate,
     PreferenceIntensitySerializer,
@@ -1077,9 +1078,31 @@ class EngineConverter:
                     acceptability_index_serializer.save(category=category_root)
 
     @staticmethod
-    def insert_pairwise_winnings(category_root) -> None:
-        # TODO - waiting for uta-gms-engine
-        pass
+    def insert_pairwise_winnings(category_root, pairwise_winnings: Dict[str, Dict[str, float]]) -> None:
+        """
+        Insert pairwise winning acceptability indices into the database for the specified category.
+
+        This method takes a dictionary where keys are alternative IDs, and values are dictionaries representing the
+        pairwise winning acceptability indices against other alternatives. It inserts these pairwise winning
+        acceptability indices into the database and associates them with the specified category.
+
+        Parameters:
+        -----------
+        category_root : Category
+            The root category for which the pairwise winning percentages are to be inserted.
+        pairwise_winnings : Dict[str, Dict[str, float]]
+            A dictionary where keys are alternative IDs, and values are dictionaries representing pairwise winning
+            acceptability indices against other alternatives.
+        """
+        for key_1, percentages in pairwise_winnings.items():
+            for key_2, percentage in percentages.items():
+                pairwise_winning_serializer = PairwiseWinningSerializer(data={
+                    'percent': percentage,
+                    'alternative_1': int(key_1),
+                    'alternative_2': int(key_2)
+                })
+                if pairwise_winning_serializer.is_valid():
+                    pairwise_winning_serializer.save(category=category_root)
 
     @staticmethod
     def update_rankings(category_root: Category, ranking: Dict[str, float]) -> None:
@@ -1166,25 +1189,27 @@ class EngineConverter:
                     relation.save(category=category_root)
 
     @staticmethod
-    def update_extreme_ranks(category_root: Category, extreme_ranks: Dict[str, Tuple[int, int]]) -> None:
+    def update_extreme_ranks(category_root: Category, extreme_ranks: Dict[str, Tuple[Tuple[int, int], Tuple[int, int]]]) -> None:
         """
-        Update extreme ranking positions for alternatives in the specified category.
+        Update extreme rank positions for the specified category.
 
-        This method updates the extreme best and worst ranking positions for each alternative in the provided dictionary
-        and saves the changes to the database.
+        This method updates the extreme rank positions (pessimistic and optimistic) for each alternative in the provided
+        dictionary. The dictionary keys are alternative IDs, and values are tuples representing extreme rank positions.
 
         Parameters:
         -----------
         category_root : Category
-            The root category for which the extreme rankings are to be updated.
-        extreme_ranks : Dict[str, Tuple[int, int]]
-            A dictionary where keys are alternative IDs, and values are tuples representing extreme best and worst
-            ranking positions.
+            The root category for which the extreme rank positions are to be updated.
+        extreme_ranks : Dict[str, Tuple[Tuple[int, int], Tuple[int, int]]]
+            A dictionary where keys are alternative IDs, and values are tuples representing extreme rank positions. The
+            first tuple represents pessimistic ranks (worst and best), and the second tuple represents optimistic ranks.
         """
         for key, extreme_positions in extreme_ranks.items():
             ranking = Ranking.objects.filter(alternative_id=int(key)).filter(category=category_root).first()
-            ranking.extreme_best = extreme_positions[1]
-            ranking.extreme_worst = extreme_positions[0]
+            ranking.extreme_pessimistic_worst = extreme_positions[0][0]
+            ranking.extreme_pessimistic_best = extreme_positions[0][1]
+            ranking.extreme_optimistic_worst = extreme_positions[1][0]
+            ranking.extreme_optimistic_best = extreme_positions[1][1]
             ranking.save()
 
 
@@ -1473,7 +1498,7 @@ class CategoryResults(APIView):
         # RANKING
         solver = Solver()
         try:
-            ranking, functions, samples, extreme_ranks, necessary, possible = solver.get_representative_value_function_dict(
+            ranking, functions, acceptability_indices_uge, pairwise_winnings_uge, samples_used, extreme_ranks, necessary, possible, sampler_error = solver.get_representative_value_function_dict(
                 performance_table_dict=performances,
                 comparisons=comparisons_list,
                 criteria=criteria_uged,
@@ -1486,28 +1511,31 @@ class CategoryResults(APIView):
             inconsistencies = e.data
             EngineConverter.insert_inconsistencies(category_root, inconsistencies)
         else:
-            # updating acceptability indices
+            # updating acceptability indices and pairwise winnings
             acceptability_indices = AcceptabilityIndex.objects.filter(category=category_root)
             acceptability_indices.delete()
-            EngineConverter.insert_acceptability_indices(category_root, samples)
-
-            # updating pairwise winning
             pairwise_winnings = PairwiseWinning.objects.filter(category=category_root)
             pairwise_winnings.delete()
-            EngineConverter.insert_pairwise_winnings(category_root)
+            category_root.sampler_error = None
+            # check if sampler worked
+            if not sampler_error:
+                EngineConverter.insert_acceptability_indices(category_root, acceptability_indices_uge)
+                EngineConverter.insert_pairwise_winnings(category_root, pairwise_winnings_uge)
+            else:
+                category_root.sampler_error = sampler_error
 
-            # updating rankings
+            # update rankings
             EngineConverter.update_rankings(category_root, ranking)
 
             # update extreme ranks
             EngineConverter.update_extreme_ranks(category_root, extreme_ranks)
 
-            # updating criterion functions
+            # insert criterion functions
             criterion_function_points = FunctionPoint.objects.filter(category=category_root)
             criterion_function_points.delete()
             EngineConverter.insert_criterion_functions(category_root, functions)
 
-            # update relations
+            # insert relations
             relations = Relation.objects.filter(category=category_root)
             relations.delete()
             EngineConverter.insert_relations(category_root, necessary, Relation.NECESSARY)
