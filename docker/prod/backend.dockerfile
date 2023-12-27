@@ -25,4 +25,4 @@ RUN mkdir /sampler && \
 ENV JAVA_HOME /usr/lib/jvm/java-11-openjdk-amd64
 ENV PATH $PATH:$JAVA_HOME/bin
 
-CMD ["sh", "-c", "python manage.py migrate && gunicorn utagms.wsgi"]
+CMD ["sh", "-c", "python manage.py migrate && gunicorn utagms.wsgi --timeout 120"]
