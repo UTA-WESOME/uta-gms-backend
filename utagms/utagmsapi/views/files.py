@@ -67,19 +67,18 @@ class FileUpload(APIView):
                 curr_categories.delete()
 
                 try:
-                    parser = Parser()
-                    criterion_list = parser.get_criterion_list_csv(uploaded_file_text)
+                    criterion_dict = BackendParser.get_criterion_dict_csv(uploaded_file_text)
                     uploaded_file_text.seek(0)
-                    performance_table_list = parser.get_performance_table_dict_csv(uploaded_file_text)
+                    performance_table_list = BackendParser.get_performance_table_dict_csv(uploaded_file_text)
                 except Exception:
                     return Response({'message': 'Incorrect file: {}'.format(uploaded_file.name)},
                                     status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
                 # criteria
-                for criterion in criterion_list:
+                for criterion in criterion_dict.items():
                     criterion_data = {
-                        'name': criterion.criterion_id,
-                        'gain': criterion.gain,
+                        'name': criterion[0],
+                        'gain': criterion[1],
                         'linear_segments': 0,
                     }
 
@@ -196,14 +195,13 @@ class FileUpload(APIView):
                 # criteria
                 xml_file = ordered_files_dict["criteria"]
                 current_parsed_file = xml_file.name
-                parser = Parser()
-                criterion_dict = parser.get_criterion_dict_xmcda(xml_file)
+                criterion_dict = BackendParser.get_criterion_dict_xmcda(xml_file)
 
                 criteria_id_dict = {}
                 for criterion in criterion_dict.items():
-                    gain = criteria_scales_dict.get(criterion[0], 'max' if criterion[1].gain == 1 else 'min')
+                    gain = criteria_scales_dict.get(criterion[0], criterion[1][1])
                     criterion_data = {
-                        'name': criterion[1].criterion_id,
+                        'name': criterion[1][0],
                         'gain': 1 if gain == 'max' else 0,
                         'linear_segments': criteria_segments_dict.get(criterion[0], 0)
                     }
@@ -240,8 +238,7 @@ class FileUpload(APIView):
                 alternatives_id_dict = {}
                 xml_file = ordered_files_dict["alternatives"]
                 current_parsed_file = xml_file.name
-                parser = Parser()
-                alternative_dict = parser.get_alternative_dict_xmcda(xml_file)
+                alternative_dict = BackendParser.get_alternative_dict_xmcda(xml_file)
 
                 for alternative_id, alternative_name in alternative_dict.items():
                     alternative_data = {
@@ -276,8 +273,7 @@ class FileUpload(APIView):
                 if "performanceTable" in ordered_files_dict:
                     xml_file = ordered_files_dict["performanceTable"]
                     current_parsed_file = xml_file.name
-                    parser = Parser()
-                    performance_table_dict = parser.get_performance_table_dict_xmcda(xml_file)
+                    performance_table_dict = BackendParser.get_performance_table_dict_xmcda(xml_file)
 
                     criteria = Criterion.objects.all().filter(project=project)
                     alternatives = Alternative.objects.all().filter(project=project)
