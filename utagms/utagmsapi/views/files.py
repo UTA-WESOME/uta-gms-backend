@@ -11,7 +11,6 @@ from django.http import HttpResponse
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from utagmsengine.parser import Parser
 
 from ..models import (
     Project,
@@ -35,7 +34,7 @@ from ..serializers import (
     RankingSerializer
 )
 
-from ..utils.parser import Parser as BackendParser
+from ..utils.parser import Parser
 
 
 # FileUpload
@@ -67,9 +66,9 @@ class FileUpload(APIView):
                 curr_categories.delete()
 
                 try:
-                    criterion_dict = BackendParser.get_criterion_dict_csv(uploaded_file_text)
+                    criterion_dict = Parser.get_criterion_dict_csv(uploaded_file_text)
                     uploaded_file_text.seek(0)
-                    performance_table_list = BackendParser.get_performance_table_dict_csv(uploaded_file_text)
+                    performance_table_list = Parser.get_performance_table_dict_csv(uploaded_file_text)
                 except Exception:
                     return Response({'message': 'Incorrect file: {}'.format(uploaded_file.name)},
                                     status=status.HTTP_422_UNPROCESSABLE_ENTITY)
@@ -183,19 +182,19 @@ class FileUpload(APIView):
                 if "criteriaScales" in ordered_files_dict:
                     xml_file = ordered_files_dict["criteriaScales"]
                     current_parsed_file = xml_file.name
-                    criteria_scales_dict = BackendParser.get_criterion_scales_dict_xmcda(xml_file)
+                    criteria_scales_dict = Parser.get_criterion_scales_dict_xmcda(xml_file)
 
                 # criteria segments
                 criteria_segments_dict = {}
                 if "criteriaValues" in ordered_files_dict:
                     xml_file = ordered_files_dict["criteriaValues"]
                     current_parsed_file = xml_file.name
-                    criteria_segments_dict = BackendParser.get_criterion_segments_dict_xmcda(xml_file)
+                    criteria_segments_dict = Parser.get_criterion_segments_dict_xmcda(xml_file)
 
                 # criteria
                 xml_file = ordered_files_dict["criteria"]
                 current_parsed_file = xml_file.name
-                criterion_dict = BackendParser.get_criterion_dict_xmcda(xml_file)
+                criterion_dict = Parser.get_criterion_dict_xmcda(xml_file)
 
                 criteria_id_dict = {}
                 for criterion in criterion_dict.items():
@@ -238,7 +237,7 @@ class FileUpload(APIView):
                 alternatives_id_dict = {}
                 xml_file = ordered_files_dict["alternatives"]
                 current_parsed_file = xml_file.name
-                alternative_dict = BackendParser.get_alternative_dict_xmcda(xml_file)
+                alternative_dict = Parser.get_alternative_dict_xmcda(xml_file)
 
                 for alternative_id, alternative_name in alternative_dict.items():
                     alternative_data = {
@@ -257,7 +256,7 @@ class FileUpload(APIView):
                 if "alternativesValues" in ordered_files_dict:
                     xml_file = ordered_files_dict["alternativesValues"]
                     current_parsed_file = xml_file.name
-                    alternative_ranking_dict = BackendParser.get_alternative_ranking_dict_xmcda(xml_file)
+                    alternative_ranking_dict = Parser.get_alternative_ranking_dict_xmcda(xml_file)
 
                     for alternative_id in alternative_dict.keys():
                         ranking_serializer = RankingSerializer(data={
@@ -273,7 +272,7 @@ class FileUpload(APIView):
                 if "performanceTable" in ordered_files_dict:
                     xml_file = ordered_files_dict["performanceTable"]
                     current_parsed_file = xml_file.name
-                    performance_table_dict = BackendParser.get_performance_table_dict_xmcda(xml_file)
+                    performance_table_dict = Parser.get_performance_table_dict_xmcda(xml_file)
 
                     criteria = Criterion.objects.all().filter(project=project)
                     alternatives = Alternative.objects.all().filter(project=project)
