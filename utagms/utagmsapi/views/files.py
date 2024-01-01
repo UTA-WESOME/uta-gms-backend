@@ -257,19 +257,20 @@ class FileUpload(APIView):
                         alternatives_id_dict[alternative_id] = alternative_instance.id
 
                 # rankings
-                xml_file = ordered_files_dict["alternativesValues"]
-                current_parsed_file = xml_file.name
-                alternative_ranking_dict = BackendParser.get_alternative_ranking_dict_xmcda(xml_file)
+                if "alternativesValues" in ordered_files_dict:
+                    xml_file = ordered_files_dict["alternativesValues"]
+                    current_parsed_file = xml_file.name
+                    alternative_ranking_dict = BackendParser.get_alternative_ranking_dict_xmcda(xml_file)
 
-                for alternative_id in alternative_dict.keys():
-                    ranking_serializer = RankingSerializer(data={
-                        'reference_ranking': alternative_ranking_dict.get(alternative_id, 0),
-                        'ranking': 0,
-                        'ranking_value': 0,
-                        'alternative': alternatives_id_dict[alternative_id]
-                    })
-                    if ranking_serializer.is_valid():
-                        ranking_serializer.save(category=category)
+                    for alternative_id in alternative_dict.keys():
+                        ranking_serializer = RankingSerializer(data={
+                            'reference_ranking': alternative_ranking_dict.get(alternative_id, 0),
+                            'ranking': 0,
+                            'ranking_value': 0,
+                            'alternative': alternatives_id_dict[alternative_id]
+                        })
+                        if ranking_serializer.is_valid():
+                            ranking_serializer.save(category=category)
 
                 # performance table
                 if "performanceTable" in ordered_files_dict:
