@@ -3,6 +3,7 @@ backports.zoneinfo;python_version<"3.9"
 Django==4.2.3
 django-environ==0.10.0
 djangorestframework==3.14.0
+drf-spectacular==0.26.5
 parameterized==0.9.0
 psycopg2==2.9.6
 PyJWT==2.8.0
