@@ -1,4 +1,5 @@
 from django.urls import path
+from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
 from utagmsapi.views.batch import CategoryResults, ProjectBatch
 from utagmsapi.views.files import CsvExport, FileUpload, XmlExport
@@ -63,4 +64,9 @@ urlpatterns = [
     path('projects/<int:project_pk>/upload/', FileUpload.as_view()),
     path('projects/<int:project_pk>/export_csv/', CsvExport.as_view()),
     path('projects/<int:project_pk>/export_xml/', XmlExport.as_view()),
+
+    # YOUR PATTERNS
+    path('schema/', SpectacularAPIView.as_view(), name='schema'),
+    # Optional UI:
+    path('schema/swagger-ui/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
 ]
