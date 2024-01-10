@@ -1495,6 +1495,9 @@ class CategoryResults(APIView):
         inconsistencies = Inconsistency.objects.filter(category=category_root)
         inconsistencies.delete()
 
+        # define if to use the sampler
+        sampler_on = True if category_root.samples > 0 else False
+
         # RANKING
         solver = Solver()
         try:
@@ -1505,7 +1508,8 @@ class CategoryResults(APIView):
                 positions=best_worst_positions_list,
                 intensities=preference_intensities_list,
                 sampler_path='/sampler/polyrun-1.1.0-jar-with-dependencies.jar',
-                number_of_samples='100'
+                number_of_samples=str(category_root.samples),
+                sampler_on=sampler_on
             )
         except InconsistencyException as e:
             inconsistencies = e.data
@@ -1518,11 +1522,13 @@ class CategoryResults(APIView):
             pairwise_winnings.delete()
             category_root.sampler_error = None
             # check if sampler worked
-            if not sampler_error:
+            if not sampler_error and sampler_on:
                 EngineConverter.insert_acceptability_indices(category_root, acceptability_indices_uge)
                 EngineConverter.insert_pairwise_winnings(category_root, pairwise_winnings_uge)
-            else:
+            elif sampler_error:
                 category_root.sampler_error = sampler_error
+            else:
+                category_root.sampler_error = "Sampler turned off"
 
             # update rankings
             EngineConverter.update_rankings(category_root, ranking)
