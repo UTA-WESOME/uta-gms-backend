@@ -1,3 +1,4 @@
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
 
@@ -17,8 +18,10 @@ class Project(models.Model):
     name = models.CharField(max_length=64, help_text="Project name")
     description = models.CharField(max_length=256, help_text="Project description", blank=True)
     shareable = models.BooleanField(help_text="Project shareability")
-    pairwise_mode = models.BooleanField(default=False, help_text="Set to 'True' if Pairwise Comparisons will be used, "
-                                                                 "or 'False' if Reference Ranking is preferred.")
+    pairwise_mode = models.BooleanField(
+        default=False,
+        help_text="Set to 'True' if Pairwise Comparisons will be used, or 'False' if Reference Ranking is preferred."
+    )
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="projects")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -33,6 +36,11 @@ class Category(models.Model):
     active = models.BooleanField(default=True, help_text="Should the category be used in calculating results?")
     has_results = models.BooleanField(default=False, help_text="Are results for this category calculated?")
     sampler_error = models.CharField(null=True, blank=True, help_text="Explanation of the sampler error")
+    samples = models.IntegerField(
+        default=100,
+        validators=[MinValueValidator(0), MaxValueValidator(10000)],
+        help_text="How many samples will be calculated for this category?"
+    )
     parent = models.ForeignKey("self", null=True, blank=True, on_delete=models.CASCADE, related_name="children")
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="categories")
     created_at = models.DateTimeField(auto_now_add=True)
