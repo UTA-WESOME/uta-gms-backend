@@ -160,8 +160,8 @@ cython_debug/
 .idea/
 .vscode/
 
-# Postgres docker
-postgres_data/
+# databases volumes
+databases/
 
 # custom engine builds
 engine/
