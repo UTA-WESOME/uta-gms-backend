@@ -50,7 +50,8 @@ INSTALLED_APPS = [
     'rest_framework',
     'utagmsapi',
     'corsheaders',
-    'drf_spectacular'
+    'drf_spectacular',
+    'django_celery_results'
 ]
 
 MIDDLEWARE = [
@@ -150,4 +151,5 @@ CORS_ORIGIN_ALLOW_ALL = True
 CORS_ALLOW_CREDENTIALS = True
 
 CELERY_BROKER_URL = env('CELERY_BROKER')
+CELERY_CACHE_BACKEND = env('CELERY_CACHE')
 CELERY_RESULT_BACKEND = env('CELERY_BACKEND')

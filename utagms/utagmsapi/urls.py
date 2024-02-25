@@ -1,7 +1,7 @@
 from django.urls import path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
-from utagmsapi.views.batch import CategoryResults, ProjectBatch
+from utagmsapi.views.batch import ProjectBatch, ProjectResults
 from utagmsapi.views.files import CsvExport, FileUpload, XmlExport
 from utagmsapi.views.rest import (
     AlternativeDetail,
@@ -35,10 +35,10 @@ urlpatterns = [
     path('projects/', ProjectList.as_view()),
     path('projects/<int:project_pk>', ProjectDetail.as_view()),
     path('projects/<int:project_pk>/batch/', ProjectBatch.as_view()),
+    path('projects/<int:project_pk>/results/', ProjectResults.as_view()),
 
     path('projects/<int:project_pk>/categories/', CategoryList.as_view()),
     path('categories/<int:category_pk>', CategoryDetail.as_view()),
-    path('categories/<int:category_pk>/results/', CategoryResults.as_view()),
 
     path('projects/<int:project_pk>/criteria/', CriterionList.as_view()),
     path('criteria/<int:criterion_pk>', CriterionDetail.as_view()),

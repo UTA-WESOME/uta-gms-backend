@@ -84,14 +84,20 @@ class Alternative(models.Model):
 
 class Ranking(models.Model):
     reference_ranking = models.IntegerField(blank=True, null=True, help_text="Alternative reference ranking")
-    worst_position = models.IntegerField(blank=True, null=True, help_text="Worst position the alternative can have in the final ranking")
-    best_position = models.IntegerField(blank=True, null=True, help_text="Best position the alternative can have in the final ranking")
+    worst_position = models.IntegerField(blank=True, null=True,
+                                         help_text="Worst position the alternative can have in the final ranking")
+    best_position = models.IntegerField(blank=True, null=True,
+                                        help_text="Best position the alternative can have in the final ranking")
     ranking = models.IntegerField(default=0, help_text="Alternative ranking")
     ranking_value = models.FloatField(default=0.0, help_text="Alternative's final value in the ranking")
-    extreme_pessimistic_worst = models.IntegerField(default=0, help_text="Worst possible position the alternative has using pessimistic approach")
-    extreme_pessimistic_best = models.IntegerField(default=0, help_text="Best possible position the alternative has using pessimistic approach")
-    extreme_optimistic_worst = models.IntegerField(default=0, help_text="Worst possible position the alternative has using optimistic approach")
-    extreme_optimistic_best = models.IntegerField(default=0, help_text="Best possible position the alternative has using optimistic approach")
+    extreme_pessimistic_worst = models.IntegerField(default=0,
+                                                    help_text="Worst possible position the alternative has using pessimistic approach")
+    extreme_pessimistic_best = models.IntegerField(default=0,
+                                                   help_text="Best possible position the alternative has using pessimistic approach")
+    extreme_optimistic_worst = models.IntegerField(default=0,
+                                                   help_text="Worst possible position the alternative has using optimistic approach")
+    extreme_optimistic_best = models.IntegerField(default=0,
+                                                  help_text="Best possible position the alternative has using optimistic approach")
     category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='rankings')
     alternative = models.ForeignKey(Alternative, on_delete=models.CASCADE, related_name='rankings')
     created_at = models.DateTimeField(auto_now_add=True)
@@ -239,3 +245,13 @@ class Relation(models.Model):
 
     class Meta:
         ordering = ("category", "alternative_1", "alternative_2",)
+
+
+class Job(models.Model):
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="jobs")
+    category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name="jobs")
+    group = models.IntegerField(validators=[MinValueValidator(1)],
+                                help_text="Jobs for a project with the same group were queued together.")
+    task = models.CharField(max_length=255, help_text="Celery ID of the task")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)

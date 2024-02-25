@@ -308,3 +308,9 @@ class InconsistencySerializer(serializers.ModelSerializer):
     class Meta:
         model = models.Inconsistency
         exclude = ['category']
+
+
+class JobSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.Job
+        fields = '__all__'

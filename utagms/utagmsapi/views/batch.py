@@ -1,4 +1,7 @@
 from django.db import transaction
+from django.db.models import Max, Min
+from django_celery_results.models import TaskResult
+from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -7,9 +10,9 @@ from ..models import (
     Inconsistency,
     Project
 )
-from ..permissions import IsOwnerOfCategory, IsOwnerOfProject
+from ..permissions import IsOwnerOfProject
 from ..serializers import (
-    ProjectSerializerWhole
+    JobSerializer, ProjectSerializerWhole
 )
 from ..tasks import run_engine
 from ..utils.batch_operations import BatchOperations
@@ -230,42 +233,87 @@ class ProjectBatch(APIView):
         return Response(project_serializer.data)
 
 
-class CategoryResults(APIView):
+class ProjectResults(APIView):
     """
-    API view class for processing and updating results for a specific category.
+    API view class for processing and updating results for a project.
 
     Permissions
     -----------
     - Users must be authenticated.
-    - Users must be the owner of the category to access this view.
+    - Users must be the owner of the project to access this view.
 
     Methods
     -------
-    - POST: Perform calculations on a category.
+    - GET:
+        Retrieve the status of project results.
+        Returns a response indicating whether the results are ready or still processing.
+
+    - POST:
+        Queue tasks for running the engine on project categories.
+        Returns a response confirming the tasks queued for processing.
     """
 
-    permission_classes = [IsOwnerOfCategory]
+    permission_classes = [IsOwnerOfProject]
 
     @transaction.atomic
-    def post(self, request, *args, **kwargs):
+    def get(self, request, *args, **kwargs):
         """
-        Handles the HTTP POST request to compute and update results for the specified category.
+        Retrieve the status of project results.
+
+        This method checks if the results for the project are ready or still processing. It returns a response
+        indicating whether the results are ready or still being processed.
 
         Parameters:
         -----------
         request : rest_framework.request.Request
             The HTTP request object.
-        kwargs : dict
-            A dictionary containing additional keyword arguments.
-            - category_pk (str): The unique identifier of the category to perform calculations on.
+        project_pk : str
+            The unique identifier of the project.
 
         Returns:
         --------
         Response
-            A response indicating the success or failure of the computation and update process.
+            A JSON response indicating whether the results are ready (200) or still processing (202).
         """
-        category_id = kwargs.get('category_pk')
-        task = run_engine.delay(category_id)
-        print(task.id)
+        project_id = kwargs.get('project_pk')
+        project = Project.objects.filter(id=project_id).first()
+        for job in project.jobs.filter(group=project.jobs.aggregate(max_group=Max('group'))['max_group']):
+            if not TaskResult.objects.filter(task_id=job.task).exists():
+                return Response({"message": "Results not ready yet"}, status=status.HTTP_202_ACCEPTED)
+        return Response({"message": "Results ready"})
 
-        return Response({"details": f"Task to run for category {category_id} queued for processing"})
+    @transaction.atomic
+    def post(self, request, *args, **kwargs):
+        """
+        Queue tasks for running the engine on project categories.
+
+        This method queues tasks for running the engine on each category of the project. It returns a response
+        confirming the tasks have been queued for processing.
+
+        Parameters:
+        -----------
+        request : rest_framework.request.Request
+            The HTTP request object.
+        project_pk : str
+            The unique identifier of the project.
+
+        Returns:
+        --------
+        Response
+            A JSON response confirming the tasks queued for processing.
+        """
+        project_id = kwargs.get('project_pk')
+        project = Project.objects.filter(id=project_id).first()
+        group_number = project.jobs.aggregate(min_group=Min('group'))['min_group']
+        for category in project.categories.all():
+            task = run_engine.delay(category.id)
+            job_serializer = JobSerializer(data={
+                'project': project.id,
+                'category': category.id,
+                'group': group_number + 1 if group_number is not None else 1,
+                'task': task.id
+            })
+            if job_serializer.is_valid():
+                job_serializer.save()
+
+        return Response({"message": f"Tasks to run for project {project.name} queued for processing"})
