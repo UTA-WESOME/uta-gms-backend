@@ -1,7 +1,6 @@
 from django.db import transaction
-from django.db.models import Max, Min
-from django_celery_results.models import TaskResult
-from rest_framework import status
+from django.db.models import Max
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -10,9 +9,9 @@ from ..models import (
     Inconsistency,
     Project
 )
-from ..permissions import IsOwnerOfProject
+from ..permissions import IsOwnerOfProject, ProjectJobCompletion
 from ..serializers import (
-    JobSerializer, ProjectSerializerWhole
+    JobSerializer, ProjectSerializerJobs, ProjectSerializerWhole
 )
 from ..tasks import run_engine
 from ..utils.batch_operations import BatchOperations
@@ -29,8 +28,9 @@ class ProjectBatch(APIView):
 
     Permissions
     -----------
-    - Users must be authenticated.
-    - Users must be the owner of the project to access this view.
+    - User must be authenticated.
+    - User must be the owner of the project to access this view.
+    - Project's job must be completed.
 
     Methods
     -------
@@ -38,7 +38,10 @@ class ProjectBatch(APIView):
     - PATCH: Perform batch updates on a project based on the provided data.
     """
 
-    permission_classes = [IsOwnerOfProject]
+    permission_classes = [IsOwnerOfProject, ProjectJobCompletion]
+
+    def permission_denied(self, request, message=None, code=None):
+        raise PermissionDenied(message)
 
     def get(self, request, *args, **kwargs):
         """
@@ -233,35 +236,27 @@ class ProjectBatch(APIView):
         return Response(project_serializer.data)
 
 
-class ProjectResults(APIView):
+class ProjectJobs(APIView):
     """
-    API view class for processing and updating results for a project.
+    API view class for retrieving project jobs.
 
     Permissions
     -----------
-    - Users must be authenticated.
-    - Users must be the owner of the project to access this view.
+    - User must be authenticated.
+    - User must be the owner of the project to access this view.
 
     Methods
     -------
     - GET:
-        Retrieve the status of project results.
-        Returns a response indicating whether the results are ready or still processing.
-
-    - POST:
-        Queue tasks for running the engine on project categories.
-        Returns a response confirming the tasks queued for processing.
+        Retrieve project jobs.
     """
-
     permission_classes = [IsOwnerOfProject]
 
-    @transaction.atomic
     def get(self, request, *args, **kwargs):
         """
-        Retrieve the status of project results.
+        Retrieve project jobs.
 
-        This method checks if the results for the project are ready or still processing. It returns a response
-        indicating whether the results are ready or still being processed.
+        This method retrieves and returns information about the jobs associated with the project.
 
         Parameters:
         -----------
@@ -273,14 +268,35 @@ class ProjectResults(APIView):
         Returns:
         --------
         Response
-            A JSON response indicating whether the results are ready (200) or still processing (202).
+            A serialized representation of the project jobs.
         """
         project_id = kwargs.get('project_pk')
         project = Project.objects.filter(id=project_id).first()
-        for job in project.jobs.filter(group=project.jobs.aggregate(max_group=Max('group'))['max_group']):
-            if not TaskResult.objects.filter(task_id=job.task).exists():
-                return Response({"message": "Results not ready yet"}, status=status.HTTP_202_ACCEPTED)
-        return Response({"message": "Results ready"})
+        project_serializer = ProjectSerializerJobs(project)
+        return Response(project_serializer.data)
+
+
+class ProjectResults(APIView):
+    """
+    API view class for processing and updating results for a project.
+
+    Permissions
+    -----------
+    - User must be authenticated.
+    - User must be the owner of the project to access this view.
+    - Project's jobs must be completed.
+
+    Methods
+    -------
+    - POST:
+        Queue tasks for running the engine on project categories.
+        Returns a response confirming the tasks queued for processing.
+    """
+
+    permission_classes = [IsOwnerOfProject, ProjectJobCompletion]
+
+    def permission_denied(self, request, message=None, code=None):
+        raise PermissionDenied(message)
 
     @transaction.atomic
     def post(self, request, *args, **kwargs):
@@ -304,12 +320,12 @@ class ProjectResults(APIView):
         """
         project_id = kwargs.get('project_pk')
         project = Project.objects.filter(id=project_id).first()
-        group_number = project.jobs.aggregate(min_group=Min('group'))['min_group']
-        for category in project.categories.all():
+        group_number = project.jobs.aggregate(max_group=Max('group'))['max_group']
+        for category in project.categories.filter(active=True):
             task = run_engine.delay(category.id)
             job_serializer = JobSerializer(data={
                 'project': project.id,
-                'category': category.id,
+                'name': category.name,
                 'group': group_number + 1 if group_number is not None else 1,
                 'task': task.id
             })

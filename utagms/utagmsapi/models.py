@@ -249,7 +249,7 @@ class Relation(models.Model):
 
 class Job(models.Model):
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="jobs")
-    category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name="jobs")
+    name = models.CharField(max_length=255, help_text="Job's (category) name")
     group = models.IntegerField(validators=[MinValueValidator(1)],
                                 help_text="Jobs for a project with the same group were queued together.")
     task = models.CharField(max_length=255, help_text="Celery ID of the task")
