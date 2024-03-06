@@ -18,7 +18,8 @@ env = environ.Env(
     SECRET_KEY=(str, 'verysecret'),
     ALLOWED_HOSTS=(list, ['*']),
     CELERY_BROKER=(str, "redis://uta-gms-redis:6379/0"),
-    CELERY_BACKEND=(str, "redis://uta-gms-redis:6379/0")
+    CELERY_CACHE=(str, "django-cache"),
+    CELERY_BACKEND=(str, "django-db")
 )
 
 # reading .env file
