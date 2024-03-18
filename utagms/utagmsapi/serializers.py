@@ -332,7 +332,10 @@ class JobSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
     def get_ready(self, obj):
-        return TaskResult.objects.filter(task_id=obj.task).exists()
+        task = TaskResult.objects.filter(task_id=obj.task).first()
+        if task is None:
+            return None
+        return task.status
 
     def get_finished_at(self, obj):
         if TaskResult.objects.filter(task_id=obj.task).exists():

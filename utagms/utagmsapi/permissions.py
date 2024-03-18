@@ -4,7 +4,7 @@ from django_celery_results.models import TaskResult
 from rest_framework import permissions
 from rest_framework.permissions import SAFE_METHODS
 
-from utagmsapi.models import Project
+from utagmsapi.models import Job, Project
 from utagmsapi.utils.jwt import get_user_from_jwt
 
 
@@ -48,6 +48,29 @@ class IsOwnerOfProject(permissions.BasePermission):
         # Checking if user is the owner of the project.
         # If they are it means that they can also get criterion or alternative from this project
         return project.user == user
+
+
+class IsOwnerOfJob(permissions.BasePermission):
+
+    def has_permission(self, request, view):
+        # get user
+        token = request.COOKIES.get('access_token')
+        if token is None:
+            return False
+        try:
+            user = get_user_from_jwt(token)
+        except (jwt.ExpiredSignatureError, jwt.InvalidSignatureError):
+            return False
+
+        # get job
+        job_pk = view.kwargs.get('job_pk')
+        if job_pk is None:
+            return False
+        job = Job.objects.filter(id=job_pk).first()
+        if job is None:
+            return False
+
+        return job.project.user == user
 
 
 class ProjectJobCompletion(permissions.BasePermission):

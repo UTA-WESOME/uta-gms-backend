@@ -1,15 +1,18 @@
 from django.db import transaction
 from django.db.models import Max
+from django_celery_results.models import TaskResult
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from utagms.celery import app
 from ..models import (
     Category,
     Inconsistency,
+    Job,
     Project
 )
-from ..permissions import IsOwnerOfProject, ProjectJobCompletion
+from ..permissions import IsOwnerOfJob, IsOwnerOfProject, ProjectJobCompletion
 from ..serializers import (
     JobSerializer, ProjectSerializerJobs, ProjectSerializerWhole
 )
@@ -333,3 +336,47 @@ class ProjectResults(APIView):
                 job_serializer.save()
 
         return Response({"message": f"Tasks to run for project {project.name} queued for processing"})
+
+
+class JobCancellation(APIView):
+    """
+    API view class for canceling a job.
+
+    Permissions
+    -----------
+    - User must be authenticated.
+    - User must be the owner of the job to access this view.
+
+    Methods
+    -------
+    - POST:
+        Cancel a job by revoking its associated task.
+
+    """
+
+    permission_classes = [IsOwnerOfJob]
+
+    def post(self, request, *args, **kwargs):
+        """
+        Cancel a job by revoking its associated task.
+
+        This method cancels a job by revoking its associated task if it exists.
+
+        Parameters:
+        -----------
+        request : rest_framework.request.Request
+            The HTTP request object.
+        job_pk : str
+            The unique identifier of the job to be canceled.
+
+        Returns:
+        --------
+        Response
+            A serialized representation of the cancele
+        """
+        job_id = kwargs.get('job_pk')
+        job = Job.objects.filter(id=job_id).first()
+        if not TaskResult.objects.filter(task_id=job.task).exists():
+            app.control.revoke(job.task, terminate=True)
+
+        return Response(JobSerializer(job).data)
