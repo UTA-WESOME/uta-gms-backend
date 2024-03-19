@@ -1,5 +1,8 @@
+from django.db.models import Max
+from django_celery_results.models import TaskResult
 from rest_framework import generics
 
+from utagms.celery import app
 from utagmsapi.utils.jwt import get_user_from_jwt
 from ..models import Project
 from ..permissions import IsLogged, IsOwnerOfProject
@@ -36,3 +39,10 @@ class ProjectDetail(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = ProjectSerializer
     queryset = Project.objects.all()
     lookup_url_kwarg = 'project_pk'
+
+    def perform_destroy(self, instance):
+        # Cancel any currently running jobs
+        for job in instance.jobs.filter(group=instance.jobs.aggregate(max_group=Max('group'))['max_group']):
+            if not TaskResult.objects.filter(task_id=job.task).exists():
+                app.control.revoke(job.task, terminate=True)
+        super().perform_destroy(instance)
