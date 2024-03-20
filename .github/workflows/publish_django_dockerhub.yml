@@ -5,6 +5,10 @@ on:
       - master
     tags:
       - "v*.*"
+  pull_request:
+    branches:
+      - master
+
 jobs:
   push_to_registry:
     name: 🐳📦 Push Docker image to Docker Hub
@@ -13,24 +17,23 @@ jobs:
       - name: Checkout the repository
         uses: actions/checkout@v4
 
-      - name: Log in to Docker Hub
+      - name: Extract metadata for the Docker image
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.DOCKER_USERNAME }}/uta-gms-django
+
+      - name: Login to Docker Hub
+        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Extract metadata for the Docker image
-        id: meta
-        uses: docker/metadata-action@98669ae865ea3cffbcbaa878cf57c20bbf1c6c38
-        with:
-          images: ${{ secrets.DOCKER_USERNAME }}/uta-gms-django
-          tags: |
-            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'master') }}
-
       - name: Build and push Docker Django image
         uses: docker/build-push-action@v5
         with:
           context: .
+          push: ${{ github.event_name != 'pull_request' }}
           file: ./docker/prod/django.dockerfile
-          push: true
           tags: ${{ steps.docker_meta.outputs.tags }}
