@@ -22,6 +22,8 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ secrets.DOCKER_USERNAME }}/uta-gms-django
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'master') }}
 
       - name: Login to Docker Hub
         if: github.event_name != 'pull_request'
@@ -36,4 +38,4 @@ jobs:
           context: .
           push: ${{ github.event_name != 'pull_request' }}
           file: ./docker/prod/django.dockerfile
-          tags: ${{ steps.docker_meta.outputs.tags }}
+          tags: ${{ steps.meta.outputs.tags }}
