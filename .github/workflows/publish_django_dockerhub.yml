@@ -11,7 +11,7 @@ on:
 
 jobs:
   push_to_registry:
-    name: 🐳📦 Push Docker image to Docker Hub
+    name: 🐳📦 Build and Push Docker Django image to Docker Hub
     runs-on: ubuntu-latest
     steps:
       - name: Checkout the repository
