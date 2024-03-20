@@ -10,7 +10,7 @@ on:
       - master
 
 jobs:
-  push_to_registry:
+  docker:
     name: 🐳📦 Build and Push Docker Django image to Docker Hub
     runs-on: ubuntu-latest
     steps:

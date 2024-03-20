@@ -10,7 +10,7 @@ on:
       - master
 
 jobs:
-  push_to_registry:
+  docker:
     name: 🐳📦 Build and Push Docker Celery to Docker Hub
     runs-on: ubuntu-latest
     steps:
@@ -19,7 +19,7 @@ jobs:
 
       - name: Extract metadata for the Docker image
         id: meta
-        uses: docker/metadata-action@98669ae865ea3cffbcbaa878cf57c20bbf1c6c38
+        uses: docker/metadata-action@v5
         with:
           images: ${{ secrets.DOCKER_USERNAME }}/uta-gms-celery
           tags: |
