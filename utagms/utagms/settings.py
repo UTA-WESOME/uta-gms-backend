@@ -14,7 +14,12 @@ from pathlib import Path
 import environ
 
 env = environ.Env(
-    DEBUG=(bool, False)
+    DEBUG=(bool, False),
+    SECRET_KEY=(str, 'verysecret'),
+    ALLOWED_HOSTS=(list, ['*']),
+    CELERY_BROKER=(str, "redis://uta-gms-redis:6379/0"),
+    CELERY_CACHE=(str, "django-cache"),
+    CELERY_BACKEND=(str, "django-db")
 )
 
 # reading .env file
@@ -46,7 +51,8 @@ INSTALLED_APPS = [
     'rest_framework',
     'utagmsapi',
     'corsheaders',
-    'drf_spectacular'
+    'drf_spectacular',
+    'django_celery_results'
 ]
 
 MIDDLEWARE = [
@@ -144,3 +150,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 CORS_ORIGIN_ALLOW_ALL = True
 CORS_ALLOW_CREDENTIALS = True
+
+CELERY_BROKER_URL = env('CELERY_BROKER')
+CELERY_CACHE_BACKEND = env('CELERY_CACHE')
+CELERY_RESULT_BACKEND = env('CELERY_BACKEND')

@@ -1,10 +1,11 @@
 from django.contrib.auth.hashers import make_password
+from django_celery_results.models import TaskResult
 from rest_framework import serializers
 from rest_framework.exceptions import MethodNotAllowed, ValidationError
 
 from utagmsapi import models
 from utagmsapi.models import (AcceptabilityIndex, Alternative, Category, Criterion, CriterionCategory, FunctionPoint,
-                              Inconsistency, PairwiseComparison, PairwiseWinning, Performance, PreferenceIntensity,
+                              Inconsistency, Job, PairwiseComparison, PairwiseWinning, Performance, PreferenceIntensity,
                               Ranking, Relation)
 
 
@@ -63,6 +64,18 @@ class ProjectSerializerWhole(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         raise MethodNotAllowed("Update operation not allowed")
+
+
+class ProjectSerializerJobs(serializers.ModelSerializer):
+    jobs = serializers.SerializerMethodField()
+
+    def get_jobs(self, obj):
+        jobs = Job.objects.filter(project=obj)
+        return JobSerializer(jobs, many=True).data
+
+    class Meta:
+        model = models.Project
+        fields = '__all__'
 
 
 class CategorySerializer(serializers.ModelSerializer):
@@ -308,3 +321,23 @@ class InconsistencySerializer(serializers.ModelSerializer):
     class Meta:
         model = models.Inconsistency
         exclude = ['category']
+
+
+class JobSerializer(serializers.ModelSerializer):
+    ready = serializers.SerializerMethodField()
+    finished_at = serializers.SerializerMethodField()
+
+    class Meta:
+        model = models.Job
+        fields = '__all__'
+
+    def get_ready(self, obj):
+        task = TaskResult.objects.filter(task_id=obj.task).first()
+        if task is None:
+            return None
+        return task.status
+
+    def get_finished_at(self, obj):
+        if TaskResult.objects.filter(task_id=obj.task).exists():
+            return TaskResult.objects.filter(task_id=obj.task).first().date_done
+        return None

@@ -13,13 +13,15 @@ RUN apt-get update && apt-get install -y \
     default-jre \
     && rm -rf /var/lib/apt/lists/*
 
-COPY ./utagms/requirements.txt .
-
-RUN pip install --upgrade pip
-RUN pip install -r requirements.txt
-
 # get sampler java package and setup env variables
 RUN mkdir /sampler && \
     wget -O /sampler/polyrun-1.1.0-jar-with-dependencies.jar https://github.com/kciomek/polyrun/releases/download/v1.1.0/polyrun-1.1.0-jar-with-dependencies.jar
 ENV JAVA_HOME /usr/lib/jvm/java-11-openjdk-amd64
 ENV PATH $PATH:$JAVA_HOME/bin
+
+ADD ./utagms .
+
+RUN pip install --upgrade pip
+RUN pip install -r requirements.txt
+
+CMD ["sh", "-c", "python manage.py migrate && python manage.py runserver 0.0.0.0:8080"]

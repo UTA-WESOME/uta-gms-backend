@@ -1,13 +1,31 @@
 name: uta-gms-backend
 services:
+
+  uta-gms-postgres:
+    image: postgres:15.0
+    ports:
+      - "54320:5432"
+    volumes:
+      - ./../../databases/postgres_data:/var/lib/postgresql/data
+    env_file: ./../../utagms/.env
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  uta-gms-redis:
+    image: redis:7.2.4-alpine
+    volumes:
+      - ./../../databases/redis_data:/data
+    ports:
+      - "6379:6379"
+
   uta-gms-django:
-    container_name: uta_gms_django
+    container_name: uta-gms-django
     build:
       context: ../..
-      dockerfile: docker/dev/backend.dockerfile
-    command: >
-      sh -c "python manage.py migrate && 
-             python manage.py runserver 0.0.0.0:8080"
+      dockerfile: docker/dev/django.dockerfile
     ports:
       - "8080:8080"
     env_file: ./../../utagms/.env
@@ -17,18 +35,13 @@ services:
       uta-gms-postgres:
         condition: service_healthy
 
-  uta-gms-postgres:
-    image: postgres:15.0
-    ports:
-      - "54320:5432"
-    volumes:
-      - ./../../postgres_data:/var/lib/postgresql/data
+  uta-gms-celery:
+    container_name: uta-gms-celery
+    build:
+      context: ../..
+      dockerfile: docker/dev/celery.dockerfile
     env_file: ./../../utagms/.env
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-volumes:
-  postgres_data:
+    volumes:
+      - ./../../utagms:/app
+    depends_on:
+      - uta-gms-redis

@@ -1,8 +1,10 @@
 import jwt
+from django.db.models import Max
+from django_celery_results.models import TaskResult
 from rest_framework import permissions
+from rest_framework.permissions import SAFE_METHODS
 
-from utagmsapi.models import (Alternative, Category, Criterion, CriterionCategory, PairwiseComparison, Performance,
-                              PreferenceIntensity, Project, Ranking)
+from utagmsapi.models import Job, Project
 from utagmsapi.utils.jwt import get_user_from_jwt
 
 
@@ -48,144 +50,7 @@ class IsOwnerOfProject(permissions.BasePermission):
         return project.user == user
 
 
-class IsOwnerOfCategory(permissions.BasePermission):
-
-    def has_permission(self, request, view):
-
-        # get user
-        token = request.COOKIES.get('access_token')
-        if token is None:
-            return False
-        try:
-            user = get_user_from_jwt(token)
-        except (jwt.ExpiredSignatureError, jwt.InvalidSignatureError):
-            return False
-
-        # get category
-        category_pk = view.kwargs.get('category_pk')
-        if category_pk is None:
-            return False
-        category = Category.objects.filter(id=category_pk).first()
-
-        # check if criterion's project user is the same as the one making the request
-        return category.project.user == user
-
-
-class IsOwnerOfCriterion(permissions.BasePermission):
-
-    def has_permission(self, request, view):
-
-        # get user
-        token = request.COOKIES.get('access_token')
-        if token is None:
-            return False
-        try:
-            user = get_user_from_jwt(token)
-        except (jwt.ExpiredSignatureError, jwt.InvalidSignatureError):
-            return False
-
-        # get criterion
-        criterion_pk = view.kwargs.get('criterion_pk')
-        if criterion_pk is None:
-            return False
-        criterion = Criterion.objects.filter(id=criterion_pk).first()
-
-        # check if criterion's project user is the same as the one making the request
-        return criterion.project.user == user
-
-
-class IsOwnerOfCriterionCategory(permissions.BasePermission):
-
-    def has_permission(self, request, view):
-
-        # get user
-        token = request.COOKIES.get('access_token')
-        if token is None:
-            return False
-        try:
-            user = get_user_from_jwt(token)
-        except (jwt.ExpiredSignatureError, jwt.InvalidSignatureError):
-            return False
-
-        # get criterion_category
-        criterion_category_pk = view.kwargs.get('criterion_category_pk')
-        if criterion_category_pk is None:
-            return False
-        criterion_category = CriterionCategory.objects.filter(id=criterion_category_pk).first()
-
-        # check if performance belongs to the user
-        return criterion_category.category.project.user == user
-
-
-class IsOwnerOfAlternative(permissions.BasePermission):
-
-    def has_permission(self, request, view):
-
-        # get user
-        token = request.COOKIES.get('access_token')
-        if token is None:
-            return False
-        try:
-            user = get_user_from_jwt(token)
-        except (jwt.ExpiredSignatureError, jwt.InvalidSignatureError):
-            return False
-
-        # get alternative
-        alternative_pk = view.kwargs.get('alternative_pk')
-        if alternative_pk is None:
-            return False
-        alternative = Alternative.objects.filter(id=alternative_pk).first()
-
-        # check if alternative's project user is the same as the one making the request
-        return alternative.project.user == user
-
-
-class IsOwnerOfPerformance(permissions.BasePermission):
-
-    def has_permission(self, request, view):
-
-        # get user
-        token = request.COOKIES.get('access_token')
-        if token is None:
-            return False
-        try:
-            user = get_user_from_jwt(token)
-        except (jwt.ExpiredSignatureError, jwt.InvalidSignatureError):
-            return False
-
-        # get performance
-        performance_pk = view.kwargs.get('performance_pk')
-        if performance_pk is None:
-            return False
-        performance = Performance.objects.filter(id=performance_pk).first()
-
-        # check if performance belongs to the user
-        return performance.alternative.project.user == user
-
-
-class IsOwnerOfPreferenceIntensity(permissions.BasePermission):
-
-    def has_permission(self, request, view):
-
-        # get user
-        token = request.COOKIES.get('access_token')
-        if token is None:
-            return False
-        try:
-            user = get_user_from_jwt(token)
-        except (jwt.ExpiredSignatureError, jwt.InvalidSignatureError):
-            return False
-
-        # get preference intensity
-        preference_intensity_pk = view.kwargs.get('preference_intensity_pk')
-        if preference_intensity_pk is None:
-            return False
-        preference_intensity = PreferenceIntensity.objects.filter(id=preference_intensity_pk).first()
-
-        return preference_intensity.project.user == user
-
-
-class IsOwnerOfPairwiseComparison(permissions.BasePermission):
+class IsOwnerOfJob(permissions.BasePermission):
 
     def has_permission(self, request, view):
         # get user
@@ -197,31 +62,33 @@ class IsOwnerOfPairwiseComparison(permissions.BasePermission):
         except (jwt.ExpiredSignatureError, jwt.InvalidSignatureError):
             return False
 
-        # get pairwise comparison
-        pairwise_comparison_pk = view.kwargs.get('pairwise_comparison_pk')
-        if pairwise_comparison_pk is None:
+        # get job
+        job_pk = view.kwargs.get('job_pk')
+        if job_pk is None:
             return False
-        pairwise_comparison = PairwiseComparison.objects.filter(id=pairwise_comparison_pk).first()
+        job = Job.objects.filter(id=job_pk).first()
+        if job is None:
+            return False
 
-        return pairwise_comparison.category.project.user == user
+        return job.project.user == user
 
 
-class IsOwnerOfRanking(permissions.BasePermission):
+class ProjectJobCompletion(permissions.BasePermission):
+    message = {"message": "Project has running jobs!"}
 
     def has_permission(self, request, view):
-        # get user
-        token = request.COOKIES.get('access_token')
-        if token is None:
-            return False
-        try:
-            user = get_user_from_jwt(token)
-        except (jwt.ExpiredSignatureError, jwt.InvalidSignatureError):
-            return False
+        if request.method in SAFE_METHODS:
+            return True
 
-        # get ranking
-        ranking_pk = view.kwargs.get('ranking_pk')
-        if ranking_pk is None:
-            return False
-        ranking = Ranking.objects.filter(id=ranking_pk).first()
+        project_id = view.kwargs.get('project_pk')
+        if project_id is None:
+            return False  # No project_pk in URL
 
-        return ranking.category.project.user == user
+        project = Project.objects.filter(id=project_id).first()
+        if project is None:
+            return False  # Project does not exist
+
+        for job in project.jobs.filter(group=project.jobs.aggregate(max_group=Max('group'))['max_group']):
+            if not TaskResult.objects.filter(task_id=job.task).exists():
+                return False
+        return True
