@@ -1,8 +1,10 @@
-name: 🐳 Publish Docker image
+name: 🐳 Publish Docker images
 on:
   push:
     branches:
       - master
+    tags:
+      - "v*.*"
 jobs:
   push_to_registry:
     name: 🐳📦 Push Docker image to Docker Hub
@@ -17,10 +19,18 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build and push Docker image
+      - name: Build and push Docker Django image
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./docker/prod/backend.dockerfile
+          file: ./docker/prod/django.dockerfile
           push: true
-          tags: anras5/uta-gms-backend:latest
+          tags: ${{ secrets.DOCKER_USERNAME }}/uta-gms-django:${{ steps.vars.outputs.tag }} , ${{ secrets.DOCKER_USERNAME }}/uta-gms-django:latest
+
+      - name: Build and push Docker Celery image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/prod/celery.dockerfile
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/uta-gms-celery:${{ steps.vars.outputs.tag }} , ${{ secrets.DOCKER_USERNAME }}/uta-gms-celery:latest

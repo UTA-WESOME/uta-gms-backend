@@ -25,7 +25,7 @@ services:
     container_name: uta-gms-django
     build:
       context: ../..
-      dockerfile: docker/dev/backend.dockerfile
+      dockerfile: docker/dev/django.dockerfile
     ports:
       - "8080:8080"
     env_file: ./../../utagms/.env
