@@ -25,4 +25,4 @@ RUN pip install --upgrade pip
 RUN pip install -r requirements.txt
 RUN pip install gunicorn
 
-CMD ["sh", "-c", "python manage.py migrate && gunicorn utagms.wsgi --access-logfile gunicorn-logs.log"]
+CMD ["sh", "-c", "python manage.py migrate && gunicorn utagms.wsgi --bind 0.0.0.0:80 --capture-output --log-level debug --access-logfile gunicorn-logs.log"]
