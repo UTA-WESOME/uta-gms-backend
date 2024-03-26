@@ -1,0 +1,3 @@
+api.utagms.pl {
+    reverse_proxy http://uta-gms-django
+}

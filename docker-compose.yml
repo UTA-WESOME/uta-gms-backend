@@ -6,8 +6,8 @@ services:
     ports:
       - "54320:5432"
     volumes:
-      - ./../../databases/postgres_data:/var/lib/postgresql/data
-    env_file: ./../../utagms/.env
+      - ./databases/postgres_data:/var/lib/postgresql/data
+    env_file: ./utagms/.env
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U postgres" ]
       interval: 5s
@@ -17,20 +17,20 @@ services:
   uta-gms-redis:
     image: redis:7.2.4-alpine
     volumes:
-      - ./../../databases/redis_data:/data
+      - ./databases/redis_data:/data
     ports:
       - "6379:6379"
 
   uta-gms-django:
     container_name: uta-gms-django
     build:
-      context: ../..
-      dockerfile: docker/dev/django.dockerfile
+      context: .
+      dockerfile: ./docker/dev/django.dockerfile
     ports:
       - "8080:8080"
-    env_file: ./../../utagms/.env
+    env_file: ./utagms/.env
     volumes:
-      - ./../../utagms:/app
+      - ./utagms:/app
     depends_on:
       uta-gms-postgres:
         condition: service_healthy
@@ -38,10 +38,10 @@ services:
   uta-gms-celery:
     container_name: uta-gms-celery
     build:
-      context: ../..
-      dockerfile: docker/dev/celery.dockerfile
-    env_file: ./../../utagms/.env
+      context: .
+      dockerfile: ./docker/dev/celery.dockerfile
+    env_file: ./utagms/.env
     volumes:
-      - ./../../utagms:/app
+      - ./utagms:/app
     depends_on:
       - uta-gms-redis
