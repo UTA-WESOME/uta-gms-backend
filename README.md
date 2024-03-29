@@ -26,8 +26,7 @@ CELERY_BACKEND=django-db
 2. Run with Docker Compose:
 
 ```commandline
-cd docker/dev
-docker compose up --build
+docker compose up
 ```
 
 ### Images on DockerHub
